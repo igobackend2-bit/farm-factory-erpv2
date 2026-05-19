@@ -8,9 +8,11 @@ import {
   Package, FileText, ChevronDown, Truck, Calendar,
   MoreVertical, Zap, ClipboardList, ShoppingCart,
   ArrowUpDown, RefreshCw, Filter, ThumbsUp, ThumbsDown,
-  Clock, AlertCircle, ShoppingBag,
+  Clock, AlertCircle, ShoppingBag, Building2, Sun, Moon,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { getBoughtQty } from '@/lib/buyStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -707,6 +709,128 @@ function ViewOrdersModal({ product, orders, onClose }: { product: string; orders
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+// ─── Hub PO Panel (Supabase-backed, shift/hub based) ─────────────────────────
+
+function HubPOPanel() {
+  const qc = useQueryClient();
+  const today = format(new Date(), 'yyyy-MM-dd');
+
+  const { data: hubPOs = [], isLoading } = useQuery({
+    queryKey: ['hub-pos', today],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('purchase_orders')
+        .select('id, po_number, hub_name, shift, status, approval_status, routed_to, total_amount, created_at, notes')
+        .gte('order_date', today)
+        .not('hub_name', 'is', null)
+        .order('created_at', { ascending: false });
+      return data ?? [];
+    },
+  });
+
+  const approvePO = async (poId: string, poNumber: string) => {
+    const { error } = await supabase
+      .from('purchase_orders')
+      .update({ status: 'approved', approval_status: 'approved', approved_at: new Date().toISOString() })
+      .eq('id', poId);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`✅ ${poNumber} approved — sent to Purchase Executive`);
+    qc.invalidateQueries({ queryKey: ['hub-pos'] });
+  };
+
+  const rejectPOById = async (poId: string, poNumber: string) => {
+    const reason = prompt(`Rejection reason for ${poNumber}:`);
+    if (!reason) return;
+    const { error } = await supabase
+      .from('purchase_orders')
+      .update({ status: 'rejected', approval_status: 'rejected', rejection_reason: reason })
+      .eq('id', poId);
+    if (error) { toast.error(error.message); return; }
+    toast.error(`${poNumber} rejected`);
+    qc.invalidateQueries({ queryKey: ['hub-pos'] });
+  };
+
+  if (isLoading) return <div className="px-6 py-4 text-sm text-gray-400">Loading hub POs…</div>;
+  if (!hubPOs.length) return null;
+
+  const shift1POs = hubPOs.filter(p => p.shift === 1);
+  const shift2POs = hubPOs.filter(p => p.shift === 2);
+
+  const renderPORow = (po: any) => (
+    <div key={po.id} className={`flex items-center gap-4 px-4 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 ${po.approval_status === 'rejected' ? 'opacity-60' : ''}`}>
+      <div className="w-7">
+        {po.shift === 1 ? <Sun size={14} className="text-blue-500" /> : <Moon size={14} className="text-orange-500" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-gray-900 font-mono">{po.po_number}</p>
+        <p className="text-[11px] text-gray-500 truncate">
+          <Building2 size={10} className="inline mr-1" />
+          {po.hub_name} · Shift {po.shift} · {po.routed_to === 'operations_manager' ? '📋 Ops Manager' : '⚡ Direct'}
+        </p>
+      </div>
+      <div className="text-right">
+        <p className="text-sm font-bold text-gray-900">₹{Number(po.total_amount || 0).toLocaleString('en-IN')}</p>
+        <p className="text-[10px] text-gray-400">{po.approval_status}</p>
+      </div>
+      <div className="flex items-center gap-2">
+        {po.approval_status === 'pending' && (
+          <>
+            <button onClick={() => approvePO(po.id, po.po_number)}
+              className="p-1.5 rounded-lg bg-green-100 hover:bg-green-200 text-green-700" title="Approve">
+              <CheckCircle2 size={14} />
+            </button>
+            <button onClick={() => rejectPOById(po.id, po.po_number)}
+              className="p-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-700" title="Reject">
+              <X size={14} />
+            </button>
+          </>
+        )}
+        {po.approval_status === 'approved' && <span className="text-[10px] font-bold text-green-600">✓ Approved</span>}
+        {po.approval_status === 'direct'   && <span className="text-[10px] font-bold text-orange-600">⚡ Direct</span>}
+        {po.approval_status === 'rejected' && <span className="text-[10px] font-bold text-red-500">✗ Rejected</span>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="px-6 pb-2">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Building2 size={16} className="text-purple-500" />
+            <h3 className="font-bold text-gray-900 text-sm">Hub-Based POs (Today)</h3>
+            <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-purple-100 text-purple-700">{hubPOs.length}</span>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-gray-500">
+            <span className="flex items-center gap-1"><Sun size={11} className="text-blue-500" /> Shift 1 → Ops Manager</span>
+            <span className="flex items-center gap-1"><Moon size={11} className="text-orange-500" /> Shift 2 → Direct</span>
+          </div>
+        </div>
+        {shift1POs.length > 0 && (
+          <div>
+            <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+              <p className="text-[11px] font-bold text-blue-700 flex items-center gap-1.5">
+                <Sun size={11} /> Shift 1 — Operations Manager Approval Required
+              </p>
+            </div>
+            {shift1POs.map(renderPORow)}
+          </div>
+        )}
+        {shift2POs.length > 0 && (
+          <div>
+            <div className="px-4 py-2 bg-orange-50 border-b border-orange-100">
+              <p className="text-[11px] font-bold text-orange-700 flex items-center gap-1.5">
+                <Moon size={11} /> Shift 2 — Directly to Purchase Executive
+              </p>
+            </div>
+            {shift2POs.map(renderPORow)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AutoPOPage() {
   const navigate = useNavigate();
   const [orders] = useState<CustomerOrder[]>(MOCK_CUSTOMER_ORDERS);
@@ -878,6 +1002,9 @@ export default function AutoPOPage() {
           </div>
         ))}
       </div>
+
+      {/* Hub POs from Sales Dashboard (Supabase) */}
+      <HubPOPanel />
 
       {/* Tabs + Search */}
       <div className="px-6 pb-4">

@@ -10,7 +10,7 @@ import {
   Search, Plus, Trash2, ShoppingBag, Repeat,
   Store, User, X, Check, RefreshCw, ChevronDown,
   Phone, MapPin, CreditCard, AlertTriangle,
-  Package, IndianRupee, FileText,
+  Package, IndianRupee, FileText, Building2, Clock,
 } from 'lucide-react';
 
 /* ─── Types ───────────────────────────────────────────────────────────────── */
@@ -298,6 +298,22 @@ export default function NewOrder() {
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [isSubmitting, setIsSubmitting]       = useState(false);
 
+  /* Hub & Shift */
+  const [selectedHubId, setSelectedHubId] = useState<string>('');
+  const [selectedHubName, setSelectedHubName] = useState<string>('');
+  const [deliveryDate, setDeliveryDate]   = useState('');
+
+  /* Shift detection based on current time */
+  const currentHour = new Date().getHours();
+  const currentMin  = new Date().getMinutes();
+  const minutesNow  = currentHour * 60 + currentMin;
+  const shift1Start = 10 * 60;        // 10:00 AM
+  const shift1End   = 19 * 60 + 30;   // 7:30 PM
+  const shift2End   = 23 * 60;        // 11:00 PM
+  const currentShift: 1 | 2 | null =
+    minutesNow >= shift1Start && minutesNow < shift1End ? 1 :
+    minutesNow >= shift1End   && minutesNow <= shift2End ? 2 : null;
+
   /* Cart */
   const [cart, setCart]           = useState<CartItem[]>([newCartItem()]);
   const [paymentMode, setPaymentMode] = useState<'cod' | 'credit' | 'upi'>('cod');
@@ -351,6 +367,15 @@ export default function NewOrder() {
     enabled: customerSearch.length >= 2,
   });
 
+  /* Hubs */
+  const { data: hubs = [] } = useQuery({
+    queryKey: ['hubs-active'],
+    queryFn: async () => {
+      const { data } = await supabase.from('hubs').select('id, name, location, city').eq('is_active', true).order('name');
+      return data ?? [];
+    },
+  });
+
   /* Products */
   const { data: products = [] } = useQuery({
     queryKey: ['products-active'],
@@ -376,6 +401,7 @@ export default function NewOrder() {
       if (isSubmitting) return;
       setIsSubmitting(true);
       if (!selectedCustomer) throw new Error('Select a customer');
+      if (!selectedHubId) throw new Error('Please select a delivery hub for this order');
       const validItems = cart.filter(c => c.product_name.trim() && c.qty > 0 && c.unit_price > 0);
       if (!validItems.length) throw new Error('Add at least one item with name, qty and price');
 
@@ -387,13 +413,16 @@ export default function NewOrder() {
             customer_id:   selectedCustomer.id,
             customer_name: selectedCustomer.shop_name || selectedCustomer.name || '',
             order_date:    format(new Date(), 'yyyy-MM-dd'),
+            delivery_date: deliveryDate || null,
             status:        'confirmed',
             payment_mode:  paymentMode,
             subtotal,
             net_amount:    netAmount,
             total_amount:  netAmount,
             notes:         notes.trim() || null,
-            hub_id:        (user as any)?.hub_id ?? null,
+            hub_id:        selectedHubId || null,
+            hub_name:      selectedHubName || null,
+            shift:         currentShift,
             ...(isRealUuid ? { created_by: user!.id } : {}),
           })
           .select().single();
@@ -557,6 +586,74 @@ export default function NewOrder() {
             )}
           </div>
         )}
+      </div>
+
+      {/* ── Hub & Shift Section ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+        <h2 className="font-semibold text-slate-800 flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-purple-500" /> Hub & Delivery
+        </h2>
+
+        {/* Shift Indicator */}
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold ${
+          currentShift === 1
+            ? 'bg-blue-50 border border-blue-200 text-blue-700'
+            : currentShift === 2
+            ? 'bg-orange-50 border border-orange-200 text-orange-700'
+            : 'bg-slate-50 border border-slate-200 text-slate-500'
+        }`}>
+          <Clock className="h-3.5 w-3.5" />
+          {currentShift === 1
+            ? '🌅 Shift 1 (10 AM – 7:30 PM) — PO will go to Operations Manager for approval'
+            : currentShift === 2
+            ? '🌙 Shift 2 (7:30 PM – 11 PM) — PO will go directly to Purchase Executive'
+            : '⏰ Outside order hours (10 AM – 11 PM)'}
+        </div>
+
+        {/* Hub Selection */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-2">
+            Delivery Hub <span className="text-red-500">*</span>
+            <span className="text-[10px] font-normal text-slate-400 ml-1">— Select based on customer location</span>
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {(hubs as any[]).map((hub: any) => (
+              <button
+                key={hub.id}
+                onClick={() => { setSelectedHubId(hub.id); setSelectedHubName(hub.name); }}
+                className={`rounded-xl border-2 p-3 text-left transition-all ${
+                  selectedHubId === hub.id
+                    ? 'border-purple-500 bg-purple-50'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}
+              >
+                <p className={`text-xs font-bold ${selectedHubId === hub.id ? 'text-purple-700' : 'text-slate-700'}`}>
+                  {hub.name}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{hub.location}, {hub.city}</p>
+              </button>
+            ))}
+          </div>
+          {!selectedHubId && (
+            <p className="text-[10px] text-amber-600 mt-1.5 flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" /> Hub selection is required to generate Purchase Order
+            </p>
+          )}
+        </div>
+
+        {/* Delivery Date */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1">
+            Delivery Date <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <input
+            type="date"
+            value={deliveryDate}
+            onChange={e => setDeliveryDate(e.target.value)}
+            min={format(new Date(), 'yyyy-MM-dd')}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
       </div>
 
       {/* ── Items Section ── */}

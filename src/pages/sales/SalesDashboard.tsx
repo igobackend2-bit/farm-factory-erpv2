@@ -7,12 +7,11 @@ import {
   ShoppingBag, TrendingUp, Clock, CheckCircle2,
   Plus, IndianRupee, Users, ChevronRight,
   Download, Package, Zap, Eye, ArrowRight,
-  RefreshCw, ShoppingCart,
+  RefreshCw, ShoppingCart, Building2, Sun, Moon,
+  AlertCircle, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { MOCK_SALES_ORDERS, aggregateSalesOrders, type MockSalesOrder } from '@/data/mockSalesOrders';
-import { createPOsFromSalesOrders, getPendingApprovalPOs } from '@/lib/purchaseStore';
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   draft:      { label: 'Draft',      className: 'bg-slate-100 text-slate-600' },
@@ -24,11 +23,6 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   partial:    { label: 'Partial',    className: 'bg-orange-100 text-orange-700' },
 };
 
-const PRODUCT_EMOJI: Record<string, string> = {
-  Onion: '🧅', Tomato: '🍅', Potato: '🥔', Carrot: '🥕',
-  Cabbage: '🥬', Beetroot: '🥦', Coriander: '🌿', Drumstick: '🌱',
-};
-
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] ?? { label: status, className: 'bg-slate-100 text-slate-600' };
   return (
@@ -38,83 +32,325 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+/* ── Shift Panel Component ───────────────────────────────────────────── */
+function ShiftPanel({
+  shift,
+  orders,
+  hubs,
+  onGeneratePO,
+  generatingPO,
+}: {
+  shift: 1 | 2;
+  orders: any[];
+  hubs: any[];
+  onGeneratePO: (shiftNum: number) => void;
+  generatingPO: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const totalValue = orders.reduce((s, o) => s + (Number(o.net_amount) || 0), 0);
+
+  const hubBreakdown = hubs.map(hub => {
+    const hubOrders = orders.filter(o => o.hub_id === hub.id);
+    const hubValue  = hubOrders.reduce((s, o) => s + (Number(o.net_amount) || 0), 0);
+    return { ...hub, orders: hubOrders, value: hubValue };
+  });
+
+  const isShift1 = shift === 1;
+
+  return (
+    <div className={`rounded-2xl border-2 overflow-hidden ${isShift1 ? 'border-blue-200' : 'border-orange-200'}`}>
+      {/* Header */}
+      <div className={`px-5 py-4 ${isShift1 ? 'bg-blue-50' : 'bg-orange-50'}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {isShift1
+              ? <Sun className="h-5 w-5 text-blue-600" />
+              : <Moon className="h-5 w-5 text-orange-600" />}
+            <div>
+              <p className={`font-bold text-sm ${isShift1 ? 'text-blue-800' : 'text-orange-800'}`}>
+                Shift {shift} — {isShift1 ? '10:00 AM to 7:30 PM' : '7:30 PM to 11:00 PM'}
+              </p>
+              <p className={`text-[11px] ${isShift1 ? 'text-blue-600' : 'text-orange-600'}`}>
+                {isShift1
+                  ? '📋 PO → Operations Manager (approval required)'
+                  : '⚡ PO → Purchase Executive (direct, no approval)'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <p className={`text-xl font-black ${isShift1 ? 'text-blue-700' : 'text-orange-700'}`}>{orders.length}</p>
+              <p className="text-[10px] text-slate-500">orders</p>
+            </div>
+            <div className="text-right">
+              <p className={`text-sm font-bold ${isShift1 ? 'text-blue-700' : 'text-orange-700'}`}>
+                ₹{totalValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              </p>
+              <p className="text-[10px] text-slate-500">value</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Hub breakdown pills */}
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
+          {hubBreakdown.map(hub => (
+            <div key={hub.id}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold ${
+                hub.orders.length > 0
+                  ? isShift1 ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'
+                  : 'bg-gray-100 text-gray-400'
+              }`}>
+              <Building2 className="h-3 w-3" />
+              {hub.name.replace(' Hub', '')}
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                hub.orders.length > 0
+                  ? isShift1 ? 'bg-blue-200 text-blue-900' : 'bg-orange-200 text-orange-900'
+                  : 'bg-gray-200 text-gray-500'
+              }`}>{hub.orders.length}</span>
+            </div>
+          ))}
+          {orders.filter(o => !o.hub_id).length > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-red-100 text-red-700">
+              <AlertCircle className="h-3 w-3" />
+              No Hub: {orders.filter(o => !o.hub_id).length}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="bg-white">
+        {/* Generate PO button */}
+        {orders.length > 0 && (
+          <div className="px-5 py-3 border-b border-gray-100">
+            <button
+              onClick={() => onGeneratePO(shift)}
+              disabled={generatingPO}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm text-white transition-all disabled:opacity-50 ${
+                isShift1
+                  ? 'bg-blue-600 hover:bg-blue-700 shadow-sm shadow-blue-200'
+                  : 'bg-orange-500 hover:bg-orange-600 shadow-sm shadow-orange-200'
+              }`}
+            >
+              {generatingPO
+                ? <><RefreshCw className="h-4 w-4 animate-spin" /> Generating POs…</>
+                : <><Zap className="h-4 w-4" />
+                    Generate {hubBreakdown.filter(h => h.orders.length > 0).length} Hub POs for Shift {shift}
+                    <ArrowRight className="h-4 w-4" />
+                  </>}
+            </button>
+            <p className="text-[10px] text-center text-slate-400 mt-1.5">
+              {isShift1
+                ? 'POs will be sent to Operations Manager for approval'
+                : 'POs will go directly to Purchase Executive — no approval needed'}
+            </p>
+          </div>
+        )}
+
+        {/* Hub detail cards */}
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {hubBreakdown.map(hub => (
+            <div key={hub.id} className={`rounded-xl border p-3 ${hub.orders.length > 0 ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Building2 className={`h-3.5 w-3.5 ${hub.orders.length > 0 ? 'text-purple-500' : 'text-gray-300'}`} />
+                <p className={`text-xs font-bold ${hub.orders.length > 0 ? 'text-slate-800' : 'text-gray-400'}`}>{hub.name}</p>
+              </div>
+              {hub.orders.length === 0 ? (
+                <p className="text-[10px] text-gray-400">No orders this shift</p>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-500">Orders</span>
+                    <span className="font-bold text-slate-800">{hub.orders.length}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-500">Value</span>
+                    <span className="font-bold text-green-700">₹{hub.value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-500">PO #</span>
+                    <span className="font-mono font-bold text-purple-600 text-[10px]">
+                      PO-{isShift1 ? 'DAY' : 'NGT'}-{hub.location?.substring(0, 2).toUpperCase() ?? 'XX'}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Expandable order list */}
+        {orders.length > 0 && (
+          <>
+            <button
+              onClick={() => setExpanded(e => !e)}
+              className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold text-slate-500 hover:text-slate-700 border-t border-gray-100 hover:bg-gray-50 transition-colors"
+            >
+              {expanded ? <><ChevronUp className="h-3.5 w-3.5" /> Hide orders</> : <><ChevronDown className="h-3.5 w-3.5" /> Show {orders.length} orders</>}
+            </button>
+            {expanded && (
+              <div className="overflow-x-auto border-t border-gray-100">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 text-gray-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold">Order #</th>
+                      <th className="px-3 py-2 text-left font-semibold">Customer</th>
+                      <th className="px-3 py-2 text-left font-semibold">Hub</th>
+                      <th className="px-3 py-2 text-right font-semibold">Value</th>
+                      <th className="px-3 py-2 text-center font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {orders.map((order: any) => (
+                      <tr key={order.id} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 font-mono font-bold text-blue-600">{order.order_number ?? order.id?.slice(0, 8)}</td>
+                        <td className="px-3 py-2 font-semibold text-gray-800">{order.customer_name}</td>
+                        <td className="px-3 py-2 text-gray-500">{order.hub_name ?? '—'}</td>
+                        <td className="px-3 py-2 text-right font-bold text-gray-900">₹{Number(order.net_amount || 0).toLocaleString('en-IN')}</td>
+                        <td className="px-3 py-2 text-center"><StatusBadge status={order.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+
+        {orders.length === 0 && (
+          <div className="px-5 py-6 text-center">
+            <p className="text-sm text-slate-400">No orders in Shift {shift} yet today</p>
+            <p className="text-[11px] text-slate-300 mt-1">
+              {isShift1 ? 'Orders placed 10 AM – 7:30 PM appear here' : 'Orders placed 7:30 PM – 11 PM appear here'}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Main Dashboard ──────────────────────────────────────────────────── */
 export default function SalesDashboard() {
   const navigate = useNavigate();
   const today = format(new Date(), 'yyyy-MM-dd');
-  const [poCreated, setPoCreated] = useState(false);
-  const [createdCount, setCreatedCount] = useState(0);
+  const [generatingPO, setGeneratingPO] = useState(false);
 
-  // Supabase stats
-  const { data: stats } = useQuery({
-    queryKey: ['sales-stats', today],
+  /* Today's orders from Supabase */
+  const { data: todayOrders = [], refetch: refetchOrders } = useQuery({
+    queryKey: ['sales-orders-today', today],
     queryFn: async () => {
       const { data } = await supabase
         .from('sales_orders')
-        .select('status, net_amount')
-        .gte('order_date', today);
-      const orders = data ?? [];
-      return {
-        total:        orders.length || MOCK_SALES_ORDERS.length,
-        delivered:    orders.filter(o => o.status === 'delivered').length || MOCK_SALES_ORDERS.filter(o => o.status === 'delivered').length,
-        totalValue:   orders.reduce((s, o) => s + (Number(o.net_amount) || 0), 0) ||
-                      MOCK_SALES_ORDERS.reduce((s, o) => s + o.products.reduce((ps, p) => ps + p.qty * p.price, 0), 0),
-        pendingValue: orders.filter(o => !['delivered','cancelled'].includes(o.status))
-                            .reduce((s, o) => s + (Number(o.net_amount) || 0), 0) ||
-                      MOCK_SALES_ORDERS.filter(o => !['delivered','cancelled'].includes(o.status))
-                            .reduce((s, o) => s + o.products.reduce((ps, p) => ps + p.qty * p.price, 0), 0),
-      };
+        .select('id, order_number, customer_name, hub_id, hub_name, shift, status, net_amount, total_amount, order_date, created_at')
+        .gte('order_date', today)
+        .order('created_at', { ascending: false });
+      return data ?? [];
     },
   });
 
-  // Aggregated items for PO preview
-  const aggregated = useMemo(() => aggregateSalesOrders(MOCK_SALES_ORDERS), []);
+  /* Hubs */
+  const { data: hubs = [] } = useQuery({
+    queryKey: ['hubs-active'],
+    queryFn: async () => {
+      const { data } = await supabase.from('hubs').select('id, name, location, city').eq('is_active', true).order('name');
+      return data ?? [];
+    },
+  });
 
-  // Export today's orders as CSV
+  /* Split by shift */
+  const shift1Orders = useMemo(() => (todayOrders as any[]).filter(o => o.shift === 1), [todayOrders]);
+  const shift2Orders = useMemo(() => (todayOrders as any[]).filter(o => o.shift === 2), [todayOrders]);
+  const noShiftOrders = useMemo(() => (todayOrders as any[]).filter(o => !o.shift), [todayOrders]);
+
+  /* Stats */
+  const totalValue   = (todayOrders as any[]).reduce((s, o) => s + (Number(o.net_amount) || 0), 0);
+  const deliveredCnt = (todayOrders as any[]).filter(o => o.status === 'delivered').length;
+  const pendingCnt   = (todayOrders as any[]).filter(o => ['confirmed','pending'].includes(o.status)).length;
+
+  /* Generate POs for a shift */
+  const handleGeneratePO = async (shiftNum: number) => {
+    setGeneratingPO(true);
+    try {
+      const shiftOrders = shiftNum === 1 ? shift1Orders : shift2Orders;
+      const hubGroups: Record<string, any[]> = {};
+      for (const o of shiftOrders) {
+        const hubKey = o.hub_id ?? 'no-hub';
+        if (!hubGroups[hubKey]) hubGroups[hubKey] = [];
+        hubGroups[hubKey].push(o);
+      }
+
+      let createdCount = 0;
+      for (const [hubId, hubOrders] of Object.entries(hubGroups)) {
+        if (hubId === 'no-hub') continue;
+        const hub = (hubs as any[]).find(h => h.id === hubId);
+        if (!hub) continue;
+
+        const hubCode = hub.location?.substring(0, 2).toUpperCase() ?? 'XX';
+        const poNumber = `PO-${shiftNum === 1 ? 'DAY' : 'NGT'}-${hubCode}-${format(new Date(), 'ddMM')}`;
+
+        const totalAmt = hubOrders.reduce((s: number, o: any) => s + (Number(o.net_amount) || 0), 0);
+
+        const { data: newPO, error } = await supabase
+          .from('purchase_orders')
+          .insert({
+            po_number:       poNumber,
+            status:          shiftNum === 1 ? 'pending_approval' : 'approved',
+            approval_status: shiftNum === 1 ? 'pending' : 'direct',
+            routed_to:       shiftNum === 1 ? 'operations_manager' : 'purchase_executive',
+            shift:           shiftNum,
+            hub_id:          hubId,
+            hub_name:        hub.name,
+            total_amount:    totalAmt,
+            notes:           `Auto-generated from Shift ${shiftNum} — ${hub.name} — ${hubOrders.length} orders`,
+          })
+          .select().single();
+
+        if (error) { console.error('PO create error:', error); continue; }
+
+        // Link sales orders to PO
+        if (newPO) {
+          await supabase.from('po_sales_order_links').insert(
+            hubOrders.map((o: any) => ({ po_id: newPO.id, sales_order_id: o.id }))
+          );
+        }
+
+        createdCount++;
+      }
+
+      toast.success(`✅ ${createdCount} Purchase Orders generated for Shift ${shiftNum}${shiftNum === 1 ? ' — sent to Operations Manager for approval' : ' — sent directly to Purchase Executive'}`);
+      setTimeout(() => navigate('/purchase/auto-po'), 1500);
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to generate POs');
+    } finally {
+      setGeneratingPO(false);
+    }
+  };
+
+  /* Export CSV */
   const handleExportCSV = () => {
-    const dateLabel = format(new Date(), 'yyyy-MM-dd');
-    const headers = [
-      'Order #', 'Shop Name', 'Customer Name', 'Phone',
-      'Address', 'Products', 'Total Qty (kg)', 'Total Value (₹)',
-      'Created By', 'Order Date', 'Delivery Date', 'Status',
-    ];
-
-    const rows = MOCK_SALES_ORDERS.map(o => {
-      const productStr = o.products.map(p => `${p.name} ${p.qty}${p.unit}`).join(' | ');
-      const totalQty   = o.products.reduce((s, p) => s + p.qty, 0);
-      const totalValue = o.products.reduce((s, p) => s + p.qty * p.price, 0);
-      return [
-        o.id, o.shopName, o.customerName, o.phone,
-        o.address, productStr, totalQty, totalValue,
-        o.createdBy, o.orderDate, o.deliveryDate, o.status,
-      ];
-    });
-
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+    if (!(todayOrders as any[]).length) { toast.error('No orders to export'); return; }
+    const headers = ['Order #', 'Customer', 'Hub', 'Shift', 'Status', 'Value (₹)', 'Date'];
+    const rows = (todayOrders as any[]).map(o => [
+      o.order_number ?? o.id?.slice(0, 8),
+      o.customer_name,
+      o.hub_name ?? '—',
+      o.shift ? `Shift ${o.shift}` : '—',
+      o.status,
+      Number(o.net_amount || 0),
+      o.order_date,
+    ]);
+    const csv = [headers, ...rows]
+      .map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
       .join('\n');
-
-    const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `Sales_Orders_${dateLabel}.csv`;
-    a.click();
+    a.href = url; a.download = `Sales_${today}.csv`; a.click();
     URL.revokeObjectURL(url);
-    toast.success(`📥 Exported ${MOCK_SALES_ORDERS.length} orders for ${dateLabel}`);
+    toast.success(`Exported ${(todayOrders as any[]).length} orders`);
   };
-
-  // Auto Create PO
-  const handleAutoCreatePO = () => {
-    const pos = createPOsFromSalesOrders(aggregated);
-    setCreatedCount(pos.length);
-    setPoCreated(true);
-    toast.success(`✅ ${pos.length} Purchase Orders created — pending manager approval`);
-    setTimeout(() => navigate('/purchase/auto-po'), 1500);
-  };
-
-  const totalOrderValue = MOCK_SALES_ORDERS.reduce(
-    (s, o) => s + o.products.reduce((ps, p) => ps + p.qty * p.price, 0), 0
-  );
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12 pt-4">
@@ -123,9 +359,12 @@ export default function SalesDashboard() {
       <div className="flex items-center justify-between mb-2">
         <div>
           <h1 className="text-[22px] font-bold text-slate-800 tracking-tight">Sales Dashboard</h1>
-          <p className="text-[13px] text-slate-500">{format(new Date(), 'EEEE, d MMMM yyyy')}</p>
+          <p className="text-[13px] text-slate-500">{format(new Date(), 'EEEE, d MMMM yyyy · h:mm a')}</p>
         </div>
         <div className="flex items-center gap-3">
+          <button onClick={() => refetchOrders()} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50">
+            <RefreshCw className="h-4 w-4 text-gray-500" />
+          </button>
           <button onClick={handleExportCSV} className="btn-zoho-secondary">
             <Download className="h-4 w-4 mr-2 inline" /> Export
           </button>
@@ -136,12 +375,12 @@ export default function SalesDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Today's Orders", value: MOCK_SALES_ORDERS.length, icon: ShoppingBag, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Total Value',    value: `₹${(totalOrderValue / 1000).toFixed(1)}k`, icon: IndianRupee, color: 'text-green-600', bg: 'bg-green-50' },
-          { label: 'Delivered',      value: MOCK_SALES_ORDERS.filter(o => o.status === 'delivered').length, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Pending',        value: MOCK_SALES_ORDERS.filter(o => ['confirmed','pending'].includes(o.status)).length, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: "Today's Orders", value: (todayOrders as any[]).length, icon: ShoppingBag, color: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: 'Total Value',    value: `₹${totalValue >= 1000 ? (totalValue / 1000).toFixed(1) + 'k' : totalValue}`, icon: IndianRupee, color: 'text-green-600', bg: 'bg-green-50' },
+          { label: 'Delivered',      value: deliveredCnt, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Pending',        value: pendingCnt,   icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
         ].map(card => (
           <div key={card.label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
             <div className={`p-3 ${card.bg} rounded-xl`}>
@@ -155,156 +394,97 @@ export default function SalesDashboard() {
         ))}
       </div>
 
-      {/* Main content */}
+      {/* Two-Shift Panels */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-bold text-slate-800 flex items-center gap-2">
+            <Clock className="h-4 w-4 text-slate-500" /> Today's Orders by Shift
+          </h2>
+          <span className="text-[11px] text-slate-400">Hub POs auto-generated at shift cutoff</span>
+        </div>
+        <div className="space-y-4">
+          <ShiftPanel shift={1} orders={shift1Orders} hubs={hubs as any[]} onGeneratePO={handleGeneratePO} generatingPO={generatingPO} />
+          <ShiftPanel shift={2} orders={shift2Orders} hubs={hubs as any[]} onGeneratePO={handleGeneratePO} generatingPO={generatingPO} />
+        </div>
+
+        {/* No-hub warning */}
+        {noShiftOrders.length > 0 && (
+          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+            <p className="text-xs text-amber-700">
+              <span className="font-bold">{noShiftOrders.length} orders</span> were placed outside shift hours or before the hub feature was added. They won't be included in shift POs.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom grid: Recent orders + Quick links */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* Orders Table — 2/3 width */}
-        <div className="lg:col-span-2 space-y-4">
-
-          {/* Orders card */}
+        {/* Recent Orders */}
+        <div className="lg:col-span-2">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div className="flex items-center gap-2">
                 <ShoppingBag className="h-4 w-4 text-blue-500" />
-                <h2 className="font-bold text-slate-800 text-sm">Sales Orders</h2>
-                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full">{MOCK_SALES_ORDERS.length}</span>
+                <h2 className="font-bold text-slate-800 text-sm">All Today's Orders</h2>
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full">{(todayOrders as any[]).length}</span>
               </div>
               <Link to="/sales/orders" className="text-xs text-blue-600 hover:underline font-semibold flex items-center gap-1">
                 View All <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-gray-500 text-xs">
-                  <tr>
-                    <th className="px-4 py-2.5 text-left font-semibold">Order #</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Shop</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Items</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Value (₹)</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Created By</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Date</th>
-                    <th className="px-4 py-2.5 text-center font-semibold">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {MOCK_SALES_ORDERS.map(order => {
-                    const value = order.products.reduce((s, p) => s + p.qty * p.price, 0);
-                    return (
-                      <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3">
-                          <span className="font-bold text-blue-600 text-xs font-mono">{order.id}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="font-semibold text-gray-800 text-xs">{order.shopName}</p>
-                          <p className="text-[10px] text-gray-400">{order.phone}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="text-xs text-gray-600 max-w-[140px] truncate">
-                            {order.products.map(p => `${p.name} ${p.qty}${p.unit}`).join(', ')}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 text-right font-bold text-gray-900 text-xs">
-                          ₹{value.toLocaleString('en-IN')}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-xs text-gray-600">{order.createdBy}</span>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-gray-500">{order.orderDate}</td>
-                        <td className="px-4 py-3 text-center">
-                          <StatusBadge status={order.status} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Auto Create PO card */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-amber-500" />
-                <h2 className="font-bold text-slate-800 text-sm">Auto Create Purchase Orders</h2>
+            {(todayOrders as any[]).length === 0 ? (
+              <div className="py-12 text-center">
+                <ShoppingBag className="h-8 w-8 text-gray-200 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">No orders today yet</p>
+                <Link to="/sales/new-order" className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:underline">
+                  <Plus className="h-3.5 w-3.5" /> Create first order
+                </Link>
               </div>
-              <span className="text-[11px] text-gray-400">Item-wise aggregation from all orders</span>
-            </div>
-
-            {/* Aggregated items preview */}
-            <div className="p-4 space-y-2">
-              <p className="text-xs text-gray-500 mb-3">
-                The following items will be aggregated across <span className="font-bold text-gray-700">{MOCK_SALES_ORDERS.length} orders</span> and one PO will be created per item:
-              </p>
+            ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-amber-50 text-amber-700">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-500 text-xs">
                     <tr>
-                      <th className="px-3 py-2 text-left font-semibold">Item</th>
-                      <th className="px-3 py-2 text-right font-semibold">Total Qty</th>
-                      <th className="px-3 py-2 text-right font-semibold">Avg Price (₹)</th>
-                      <th className="px-3 py-2 text-right font-semibold">Total Value (₹)</th>
-                      <th className="px-3 py-2 text-center font-semibold">From Orders</th>
+                      <th className="px-4 py-2.5 text-left font-semibold">Order #</th>
+                      <th className="px-4 py-2.5 text-left font-semibold">Customer</th>
+                      <th className="px-4 py-2.5 text-left font-semibold">Hub</th>
+                      <th className="px-4 py-2.5 text-center font-semibold">Shift</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Value (₹)</th>
+                      <th className="px-4 py-2.5 text-center font-semibold">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {aggregated.map(item => (
-                      <tr key={item.productName} className="hover:bg-amber-50/30">
-                        <td className="px-3 py-2.5 font-semibold text-gray-800 flex items-center gap-1.5">
-                          <span>{PRODUCT_EMOJI[item.productName] ?? '📦'}</span>
-                          {item.productName}
+                    {(todayOrders as any[]).slice(0, 15).map((order: any) => (
+                      <tr key={order.id} className="hover:bg-gray-50 transition-colors cursor-pointer"
+                        onClick={() => navigate(`/sales/orders/${order.id}`)}>
+                        <td className="px-4 py-3">
+                          <span className="font-bold text-blue-600 text-xs font-mono">{order.order_number ?? order.id?.slice(0, 8)}</span>
                         </td>
-                        <td className="px-3 py-2.5 text-right font-bold text-gray-900">{item.totalQty} {item.unit}</td>
-                        <td className="px-3 py-2.5 text-right text-gray-700">₹{item.avgPrice}</td>
-                        <td className="px-3 py-2.5 text-right font-bold text-gray-900">₹{item.totalValue.toLocaleString('en-IN')}</td>
-                        <td className="px-3 py-2.5 text-center">
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-bold">{item.orderCount}</span>
+                        <td className="px-4 py-3 font-semibold text-gray-800 text-xs">{order.customer_name}</td>
+                        <td className="px-4 py-3 text-xs text-gray-500">{order.hub_name ?? <span className="text-amber-500 font-semibold">No hub</span>}</td>
+                        <td className="px-4 py-3 text-center">
+                          {order.shift
+                            ? <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${order.shift === 1 ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                                {order.shift === 1 ? '🌅 S1' : '🌙 S2'}
+                              </span>
+                            : <span className="text-gray-300 text-[10px]">—</span>}
                         </td>
+                        <td className="px-4 py-3 text-right font-bold text-gray-900 text-xs">
+                          ₹{Number(order.net_amount || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-4 py-3 text-center"><StatusBadge status={order.status} /></td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="bg-gray-50 border-t border-gray-200">
-                    <tr>
-                      <td className="px-3 py-2.5 font-black text-gray-800">{aggregated.length} Items → {aggregated.length} POs</td>
-                      <td colSpan={2}></td>
-                      <td className="px-3 py-2.5 text-right font-black text-gray-900">
-                        ₹{aggregated.reduce((s, i) => s + i.totalValue, 0).toLocaleString('en-IN')}
-                      </td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
                 </table>
               </div>
-
-              {/* Note */}
-              <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700 mt-2">
-                ℹ️ POs are created <strong>item-wise</strong> — no customer names included. Vendor will be assigned by manager during approval.
-              </div>
-
-              {/* Create PO Button */}
-              {poCreated ? (
-                <div className="flex items-center justify-center gap-2 py-4 bg-green-50 rounded-xl border border-green-200">
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                  <span className="text-green-700 font-bold text-sm">{createdCount} POs created — redirecting to Purchase Orders…</span>
-                </div>
-              ) : (
-                <button
-                  onClick={handleAutoCreatePO}
-                  className="w-full mt-2 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
-                >
-                  <Zap className="h-4 w-4" />
-                  Auto Create PO from All Orders ({aggregated.length} items)
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
 
-        {/* Right sidebar — 1/3 */}
+        {/* Right sidebar */}
         <div className="space-y-4">
-
           {/* Sales Insight */}
           <div className="zoho-card p-6 bg-slate-900 text-white border-none shadow-blue-900/10 shadow-lg">
             <div className="flex items-center justify-between mb-4">
@@ -312,12 +492,24 @@ export default function SalesDashboard() {
               <TrendingUp className="h-4 w-4 text-emerald-400" />
             </div>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Average order value is{' '}
-              <span className="text-white font-bold">
-                ₹{Math.round(totalOrderValue / MOCK_SALES_ORDERS.length).toLocaleString('en-IN')}
-              </span>{' '}
-              today.{MOCK_SALES_ORDERS.length > 5 ? ' High volume detected.' : ' Steady pace so far.'}
+              {(todayOrders as any[]).length > 0
+                ? <>Average order value is{' '}
+                    <span className="text-white font-bold">
+                      ₹{Math.round(totalValue / (todayOrders as any[]).length).toLocaleString('en-IN')}
+                    </span>
+                    {' '}today. {(todayOrders as any[]).length > 5 ? 'High volume.' : 'Steady pace.'}</>
+                : 'No orders yet today. Create the first order to get started.'}
             </p>
+            <div className="mt-4 space-y-1.5">
+              <div className="flex justify-between text-[11px]">
+                <span className="text-slate-400">Shift 1 orders</span>
+                <span className="text-blue-300 font-bold">{shift1Orders.length}</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-slate-400">Shift 2 orders</span>
+                <span className="text-orange-300 font-bold">{shift2Orders.length}</span>
+              </div>
+            </div>
             <button
               onClick={() => navigate('/purchase/auto-po')}
               className="mt-4 w-full py-2 bg-amber-500 hover:bg-amber-600 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
