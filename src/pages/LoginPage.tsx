@@ -1,8 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Eye, EyeOff, Leaf, WifiOff } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { useState, useEffect } from 'react';
+import { Loader2, Eye, EyeOff, WifiOff, ArrowRight, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -10,15 +7,22 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const STATS = [
+  { value: '500+', label: 'Orders / Day' },
+  { value: '12',   label: 'Hubs'         },
+  { value: '99.9%', label: 'Uptime'      },
+];
+
 export function LoginPage() {
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [hasNetworkError, setHasNetworkError] = useState(false);
+  const [isLoading, setIsLoading]           = useState(false);
+  const [showPassword, setShowPassword]     = useState(false);
+  const [email, setEmail]                   = useState('');
+  const [password, setPassword]             = useState('');
+  const [hasNetworkError, setHasNetworkError]   = useState(false);
   const [isCheckingNetwork, setIsCheckingNetwork] = useState(false);
+  const [focused, setFocused]               = useState<'email' | 'password' | null>(null);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated && user) {
@@ -30,14 +34,14 @@ export function LoginPage() {
     setIsCheckingNetwork(true);
     try {
       const restUrl = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/`;
-      const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      let restReachable = false;
+      const apiKey  = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      let reachable = false;
       try {
         const r = await fetch(restUrl, { method: 'HEAD', headers: { apikey: apiKey } });
-        restReachable = r.ok || r.status === 400;
-      } catch { restReachable = false; }
+        reachable = r.ok || r.status === 400;
+      } catch { reachable = false; }
 
-      if (!restReachable) {
+      if (!reachable) {
         toast.error('Connection blocked. Try switching to mobile hotspot or change DNS to 8.8.8.8', { duration: 6000 });
       } else {
         toast.success('Connection is working! Try signing in again.');
@@ -63,7 +67,6 @@ export function LoginPage() {
     const enteredIdentifier = email.trim().toLowerCase();
     let loginEmail = enteredIdentifier;
 
-    // Allow login by employee ID or username
     if (!EMAIL_REGEX.test(enteredIdentifier)) {
       const { data: matchedProfile } = await (supabase.from('profiles') as any)
         .select('email, login_enabled')
@@ -83,7 +86,6 @@ export function LoginPage() {
       loginEmail = String(matchedProfile.email).toLowerCase();
     }
 
-    // Auth with retry
     let authData = null;
     let authError = null;
     for (let i = 0; i <= 2; i++) {
@@ -107,7 +109,6 @@ export function LoginPage() {
       return;
     }
 
-    // Background: audit log
     if (authData?.user) {
       const userId = authData.user.id;
       (async () => {
@@ -132,137 +133,241 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen flex" style={{ fontFamily: "'Inter', sans-serif" }}>
 
-      {/* ── Left panel (hidden on mobile) ── */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#0f1f2e] flex-col items-center justify-center p-12 relative overflow-hidden">
-        {/* Background circles */}
-        <div className="absolute top-[-80px] left-[-80px] w-96 h-96 rounded-full bg-green-500/5" />
-        <div className="absolute bottom-[-60px] right-[-60px] w-72 h-72 rounded-full bg-green-500/8" />
+      {/* ── LEFT PANEL ─────────────────────────────────────────────── */}
+      <div
+        className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden"
+        style={{ background: 'linear-gradient(145deg, #050f1a 0%, #0a1f35 40%, #0d2b20 100%)' }}
+      >
+        {/* Decorative orbs */}
+        <div className="absolute top-[-120px] left-[-120px] w-[500px] h-[500px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)' }} />
+        <div className="absolute bottom-[-80px] right-[-80px] w-[400px] h-[400px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(34,197,94,0.08) 0%, transparent 70%)' }} />
+        <div className="absolute top-1/2 right-[-60px] w-[250px] h-[250px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.06) 0%, transparent 70%)' }} />
 
-        <div className="relative z-10 text-center max-w-sm">
-          {/* Logo */}
-          <div className="w-20 h-20 rounded-2xl bg-green-600 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-green-900/50">
-            <Leaf className="w-10 h-10 text-white" />
-          </div>
+        {/* Grid texture overlay */}
+        <div className="absolute inset-0 opacity-[0.03]"
+          style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
 
-          <h1 className="text-3xl font-bold text-white mb-2">Farmers Factory</h1>
-          <p className="text-green-400 text-sm font-semibold tracking-widest uppercase mb-8">ERP v2.0</p>
-
-          <div className="border-t border-[#1e3a5f] pt-8 space-y-4">
-            {[
-              { label: 'Purchase', desc: 'Vendor & procurement management' },
-              { label: 'Warehouse', desc: 'Inventory, QC & stock control' },
-              { label: 'Sales', desc: 'Orders, customers & collections' },
-              { label: 'Logistics', desc: 'Trips, drivers & delivery' },
-            ].map(m => (
-              <div key={m.label} className="flex items-center gap-3 text-left">
-                <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                <div>
-                  <p className="text-[13px] font-semibold text-white">{m.label}</p>
-                  <p className="text-[11px] text-[#4a6fa5]">{m.desc}</p>
-                </div>
-              </div>
-            ))}
+        {/* Top: Logo */}
+        <div className="relative z-10">
+          <div className="flex items-center gap-3">
+            <img src="/ff-logo.jpg" alt="Farmers Factory" className="w-11 h-11 rounded-xl object-cover shadow-lg" style={{ boxShadow: '0 8px 24px rgba(16,185,129,0.35)' }} />
+            <div>
+              <p className="text-white font-bold text-[16px] tracking-tight leading-tight">Farmers Factory</p>
+              <p className="text-[10px] font-semibold tracking-[0.2em] uppercase" style={{ color: '#10b981' }}>ERP v2.0</p>
+            </div>
           </div>
         </div>
 
-        <p className="absolute bottom-6 text-[11px] text-[#2a4a6a] tracking-widest uppercase">
-          Farmers Factory © 2025
-        </p>
+        {/* Center: Headline */}
+        <div className="relative z-10 flex-1 flex flex-col justify-center py-16">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6 w-fit"
+            style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}>
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[11px] font-semibold text-emerald-400 tracking-wider uppercase">Enterprise Resource Planning</span>
+          </div>
+
+          <h1 className="text-[42px] font-black leading-[1.1] mb-4" style={{ color: '#fff', letterSpacing: '-0.02em' }}>
+            Manage Everything.<br />
+            <span style={{ background: 'linear-gradient(90deg, #10b981, #34d399)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              In One Place.
+            </span>
+          </h1>
+
+          <p className="text-[15px] leading-relaxed mb-12" style={{ color: 'rgba(255,255,255,0.45)', maxWidth: '380px' }}>
+            A complete ERP built for Farmers Factory — from farm to delivery, every operation in one unified platform.
+          </p>
+
+          {/* Stats row */}
+          <div className="flex items-center gap-8">
+            {STATS.map((s, i) => (
+              <div key={s.label}>
+                <p className="text-[28px] font-black text-white leading-none">{s.value}</p>
+                <p className="text-[11px] mt-1 font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>{s.label}</p>
+                {i < STATS.length - 1 && (
+                  <div className="absolute" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Divider line */}
+          <div className="mt-10 h-px w-full" style={{ background: 'linear-gradient(90deg, rgba(16,185,129,0.4), rgba(255,255,255,0.05), transparent)' }} />
+        </div>
+
+        {/* Bottom */}
+        <div className="relative z-10 flex items-center justify-between">
+          <p className="text-[11px] tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.2)' }}>
+            © 2025 Farmers Factory
+          </p>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+            style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
+            <ShieldCheck className="w-3 h-3 text-emerald-400" />
+            <span className="text-[10px] text-emerald-400 font-semibold">Secured</span>
+          </div>
+        </div>
       </div>
 
-      {/* ── Right panel — Login form ── */}
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-md">
+      {/* ── RIGHT PANEL ────────────────────────────────────────────── */}
+      <div className="flex-1 flex items-center justify-center p-6 relative"
+        style={{ background: '#f8fafc' }}>
+
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 opacity-40"
+          style={{ backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(16,185,129,0.06) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(59,130,246,0.04) 0%, transparent 50%)' }} />
+
+        <div className="relative w-full max-w-[420px]">
 
           {/* Mobile logo */}
           <div className="flex lg:hidden items-center gap-3 mb-10 justify-center">
-            <div className="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center">
-              <Leaf className="w-5 h-5 text-white" />
-            </div>
+            <img src="/ff-logo.jpg" alt="Farmers Factory" className="w-10 h-10 rounded-xl object-cover shadow-md" />
             <div>
               <p className="text-[15px] font-bold text-gray-900">Farmers Factory</p>
               <p className="text-[10px] text-gray-400 uppercase tracking-widest">ERP v2.0</p>
             </div>
           </div>
 
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900">Sign in</h2>
-            <p className="text-gray-500 text-sm mt-1">Enter your credentials to access the ERP</p>
+          {/* Card */}
+          <div className="rounded-2xl p-8 shadow-2xl"
+            style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 24px 64px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.04)' }}>
+
+            {/* Header */}
+            <div className="mb-8">
+              <div className="flex items-center gap-3 mb-6">
+                <img src="/ff-logo.jpg" alt="Farmers Factory"
+                  className="w-14 h-14 rounded-2xl object-cover"
+                  style={{ boxShadow: '0 8px 24px rgba(16,185,129,0.3)' }} />
+                <div>
+                  <p className="text-[18px] font-black text-gray-900 leading-tight tracking-tight">FARMERS FACTORY</p>
+                  <p className="text-[11px] font-semibold tracking-[0.18em] uppercase mt-0.5" style={{ color: '#10b981' }}>ERP v2.0 · Secure Access</p>
+                </div>
+              </div>
+              <h2 className="text-[24px] font-black text-gray-900 leading-tight tracking-tight">Welcome back</h2>
+              <p className="text-sm text-gray-400 mt-1 font-medium">Sign in to continue to your dashboard</p>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-4">
+
+              {/* Email field */}
+              <div>
+                <label className="block text-[12px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+                  Email or Employee ID
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    onFocus={() => setFocused('email')}
+                    onBlur={() => setFocused(null)}
+                    placeholder="you@farmersfactory.com"
+                    disabled={isLoading}
+                    autoComplete="username"
+                    className="w-full h-12 px-4 rounded-xl text-sm font-medium text-gray-800 outline-none transition-all duration-200"
+                    style={{
+                      background: focused === 'email' ? '#fff' : '#f8fafc',
+                      border: focused === 'email'
+                        ? '2px solid #10b981'
+                        : '2px solid #e8ecf0',
+                      boxShadow: focused === 'email' ? '0 0 0 4px rgba(16,185,129,0.08)' : 'none',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Password field */}
+              <div>
+                <label className="block text-[12px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    onFocus={() => setFocused('password')}
+                    onBlur={() => setFocused(null)}
+                    placeholder="Enter your password"
+                    disabled={isLoading}
+                    autoComplete="current-password"
+                    className="w-full h-12 pl-4 pr-12 rounded-xl text-sm font-medium text-gray-800 outline-none transition-all duration-200"
+                    style={{
+                      background: focused === 'password' ? '#fff' : '#f8fafc',
+                      border: focused === 'password'
+                        ? '2px solid #10b981'
+                        : '2px solid #e8ecf0',
+                      boxShadow: focused === 'password' ? '0 0 0 4px rgba(16,185,129,0.08)' : 'none',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-0 top-0 h-full w-12 flex items-center justify-center transition-colors"
+                    style={{ color: '#9ca3af' }}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Network error */}
+              {hasNetworkError && (
+                <div className="p-4 rounded-xl" style={{ background: '#fff5f5', border: '1px solid #fecaca' }}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <WifiOff className="w-4 h-4 text-red-500 shrink-0" />
+                    <p className="text-sm text-red-700 font-semibold">Connection issue detected</p>
+                  </div>
+                  <p className="text-xs text-red-500 mb-3">Try switching to mobile hotspot or change DNS to 8.8.8.8</p>
+                  <button
+                    type="button"
+                    onClick={handleNetworkCheck}
+                    disabled={isCheckingNetwork}
+                    className="w-full h-8 text-xs font-semibold rounded-lg transition-colors"
+                    style={{ background: '#fee2e2', color: '#dc2626' }}
+                  >
+                    {isCheckingNetwork ? <Loader2 className="w-3 h-3 animate-spin inline mr-1" /> : null}
+                    Diagnose Connection
+                  </button>
+                </div>
+              )}
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-200 mt-2"
+                style={{
+                  background: isLoading
+                    ? 'linear-gradient(135deg, #6ee7b7, #34d399)'
+                    : 'linear-gradient(135deg, #059669, #10b981)',
+                  color: '#fff',
+                  boxShadow: isLoading ? 'none' : '0 8px 24px rgba(16,185,129,0.35)',
+                  transform: isLoading ? 'none' : 'translateY(0)',
+                }}
+                onMouseEnter={e => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'; }}
+              >
+                {isLoading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Signing in…</>
+                ) : (
+                  <>Sign In <ArrowRight className="w-4 h-4" /></>
+                )}
+              </button>
+            </form>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-gray-700 font-medium">Email or Employee ID</Label>
-              <Input
-                id="email"
-                type="text"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="admin@farmersfactory.com"
-                className="h-11 border-gray-300 focus:border-green-500 focus:ring-green-500 bg-white"
-                disabled={isLoading}
-                autoComplete="username"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-gray-700 font-medium">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  className="h-11 border-gray-300 focus:border-green-500 focus:ring-green-500 bg-white pr-11"
-                  disabled={isLoading}
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-0 top-0 h-full w-11 flex items-center justify-center text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {hasNetworkError && (
-              <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <WifiOff className="w-4 h-4 text-red-500 shrink-0" />
-                  <p className="text-sm text-red-700 font-medium">Connection issue detected</p>
-                </div>
-                <p className="text-xs text-red-600 mb-3">Try switching to mobile hotspot or change DNS to 8.8.8.8</p>
-                <Button
-                  type="button" variant="outline" size="sm"
-                  className="w-full h-8 text-xs border-red-200 text-red-600 hover:bg-red-50"
-                  onClick={handleNetworkCheck}
-                  disabled={isCheckingNetwork}
-                >
-                  {isCheckingNetwork ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-                  Diagnose Connection
-                </Button>
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-semibold text-base mt-2 shadow-sm"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Signing in...</>
-              ) : 'Sign In'}
-            </Button>
-          </form>
-
-          <p className="mt-10 text-center text-[11px] text-gray-400 uppercase tracking-widest">
-            Farmers Factory ERP v2.0 · Secure Access
-          </p>
+          {/* Footer */}
+          <div className="flex items-center justify-center gap-4 mt-6">
+            <div className="h-px flex-1" style={{ background: 'rgba(0,0,0,0.08)' }} />
+            <p className="text-[11px] font-semibold tracking-widest uppercase text-gray-400">
+              Farmers Factory ERP v2.0
+            </p>
+            <div className="h-px flex-1" style={{ background: 'rgba(0,0,0,0.08)' }} />
+          </div>
         </div>
       </div>
     </div>

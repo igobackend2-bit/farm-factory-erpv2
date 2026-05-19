@@ -54,16 +54,35 @@ const mapRole = (dbRole: string): UserRole => {
     'driver':                    'driver',
     'backoffice':                'back_office',
     'shiftemployee':             'shift_employee',
+    'ffoperationsmanager':       'ff_operations_manager',
+    'ffopsmanager':              'ff_operations_manager',
   };
 
   return roleMap[normalized] || 'employee';
 };
 
+// ── Demo session key ──────────────────────────────────────────────────────────
+const DEMO_SESSION_KEY = 'ff_erp_demo_session_v1';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const hasLoggedLoginRef = useRef(false);
+
+  // Demo user loaded from localStorage (bypasses Supabase entirely)
+  const [demoUser, setDemoUser] = useState<User | null>(() => {
+    try {
+      const raw = localStorage.getItem(DEMO_SESSION_KEY);
+      return raw ? (JSON.parse(raw) as User) : null;
+    } catch { return null; }
+  });
+
+  // If a demo session already exists in localStorage, skip the Supabase loading wait.
+  // This prevents the redirect-to-login flash on page reload for demo users.
+  const hasDemoSession = (() => {
+    try { return !!localStorage.getItem(DEMO_SESSION_KEY); } catch { return false; }
+  })();
+  const [isLoading, setIsLoading] = useState(!hasDemoSession);
 
   // Log login event to daily_logs table for attendance tracking
   const logDailyLogin = async (userId: string) => {
@@ -188,6 +207,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // If demo session is active, Supabase auth is not used — skip the whole flow.
+    if (hasDemoSession) return;
+
     // Safety timeout: Ensure loading state is eventually cleared even if Supabase calls hang
     const safetyTimeout = setTimeout(() => {
       if (isLoading) {
@@ -290,16 +312,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
+    setDemoUser(null);
+    localStorage.removeItem(DEMO_SESSION_KEY);
     hasLoggedLoginRef.current = false;
   };
 
+  // Called directly by LoginPage for demo credentials — updates state immediately
+  const loginAsDemo = (u: User) => {
+    localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u));
+    setDemoUser(u);
+  };
+
+  // Resolved user: real Supabase user takes priority, then demo user
+  const resolvedUser = user ?? demoUser;
+  const isAuthenticated = (!!session && !!user) || !!demoUser;
+
   return (
     <AuthContext.Provider value={{
-      user,
+      user: resolvedUser,
       session,
-      isAuthenticated: !!session && !!user,
+      isAuthenticated,
       isLoading,
-      logout
+      logout,
     }}>
       {children}
     </AuthContext.Provider>

@@ -27,6 +27,14 @@ export function useShiftUserStatus() {
                 return;
             }
 
+            // Demo users (fake UUIDs) bypass Supabase queries entirely
+            if (user.id?.startsWith('demo-')) {
+                setIsShiftUser(false);
+                setShiftConfig(null);
+                setIsLoading(false);
+                return;
+            }
+
             try {
                 const { data, error } = await (supabase
                     .from('shift_user_assignments') as any)

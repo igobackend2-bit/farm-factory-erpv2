@@ -18,6 +18,7 @@ import { EmployeeActivityWidget } from '@/components/EmployeeActivityWidget';
 import { TaskAssignmentWidget } from '@/components/TaskAssignmentWidget';
 import { PaymentSearchWidget } from '@/components/PaymentSearchWidget';
 import { PurchaseUpdatesWidget } from '@/components/purchase/PurchaseUpdatesWidget';
+import { RecentSalesOrdersWidget } from '@/components/RecentSalesOrdersWidget';
 import { MaterialRequestAuditWidget } from '@/components/purchase/MaterialRequestAuditWidget';
 import { WorkOrderMonitoringWidget } from '@/components/WorkOrderMonitoringWidget';
 import { WorkRequestApprovalWidget } from '@/components/WorkRequestApprovalWidget';
@@ -331,6 +332,15 @@ export default function GMDashboardPage() {
             transition={{ delay: 0.5 }}
           >
             <ExecutiveTicketTable role="gm" />
+          </motion.div>
+
+          {/* Sales Orders Feed */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+          >
+            <RecentSalesOrdersWidget title="Sales Orders — Live Feed" limit={10} />
           </motion.div>
         </TabsContent>
 

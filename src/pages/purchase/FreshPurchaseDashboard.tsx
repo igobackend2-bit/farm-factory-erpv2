@@ -6,13 +6,29 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Link } from 'react-router-dom';
 import {
   ShoppingCart, TrendingUp, AlertCircle, CheckCircle2, Clock,
-  Package, ChevronRight, RefreshCw, Plus, BarChart3
+  Package, ChevronRight, RefreshCw, Plus, BarChart3, Printer
 } from 'lucide-react';
+import { printPurchaseOrder } from '@/utils/printPurchaseOrder';
+import { toast } from 'sonner';
+import { PaymentDueAlerts } from '@/components/PaymentDueAlerts';
 
 export default function FreshPurchaseDashboard() {
   const { user } = useAuth();
   const hubId = (user as any)?.hub_id ?? null;
   const isManagement = ['ceo', 'gm', 'admin', 'director', 'nsm'].includes(user?.role ?? '');
+  const [printingPO, setPrintingPO] = useState<string | null>(null);
+
+  const handlePrint = async (poId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPrintingPO(poId);
+    try {
+      await printPurchaseOrder(poId);
+    } catch (err: any) {
+      toast.error(err.message || 'Print failed');
+    } finally {
+      setPrintingPO(null);
+    }
+  };
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
@@ -77,6 +93,7 @@ export default function FreshPurchaseDashboard() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12 pt-4">
+      <PaymentDueAlerts />
       <div className="flex items-center justify-between mb-2">
         <div>
           <h1 className="text-[22px] font-bold text-slate-800 tracking-tight">Purchase Dashboard</h1>
@@ -133,6 +150,7 @@ export default function FreshPurchaseDashboard() {
                     <th>Vendor</th>
                     <th>Amount</th>
                     <th>Status</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -145,6 +163,19 @@ export default function FreshPurchaseDashboard() {
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_COLOR[po.status] ?? 'bg-gray-100 text-gray-600'}`}>
                           {po.status}
                         </span>
+                      </td>
+                      <td>
+                        <button
+                          onClick={(e) => handlePrint(po.id, e)}
+                          disabled={printingPO === po.id}
+                          title="Print Purchase Order"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 transition-colors"
+                        >
+                          {printingPO === po.id
+                            ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            : <Printer className="h-3.5 w-3.5" />}
+                          Print
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -184,12 +215,16 @@ export default function FreshPurchaseDashboard() {
       </div>
 
       {/* Quick links */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Rate Comparison', path: '/purchase/rates', icon: BarChart3 },
-          { label: 'Market Rates', path: '/purchase/market-rates', icon: TrendingUp },
-          { label: 'Vendor Payments', path: '/purchase/payments', icon: AlertCircle },
-          { label: 'Performance', path: '/purchase/vendor-performance', icon: CheckCircle2 },
+          { label: 'Gate Entry',         path: '/transit/gate-entry',           icon: Package },
+          { label: 'Transit Dashboard',  path: '/transit',                      icon: ChevronRight },
+          { label: 'Payment Approvals',  path: '/purchase/payment-approvals',   icon: AlertCircle },
+          { label: 'New Payment',        path: '/purchase/payment-form',        icon: Plus },
+          { label: 'Rate Comparison',    path: '/purchase/rate-comparison',     icon: BarChart3 },
+          { label: 'Market Rates',       path: '/purchase/market-rates',        icon: TrendingUp },
+          { label: 'Vendor Payments',    path: '/purchase/vendor-payments',     icon: AlertCircle },
+          { label: 'Performance',        path: '/purchase/vendor-performance',  icon: CheckCircle2 },
         ].map(item => (
           <Link key={item.path} to={item.path}
             className="zoho-card px-4 py-4 flex flex-col items-center gap-2 text-center hover:border-blue-300">

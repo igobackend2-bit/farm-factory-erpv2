@@ -76,7 +76,7 @@ export default function LogisticsDashboard() {
 
   const updateTripStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from('trips').update({ status }).eq('id', id);
+      const { error } = await supabase.from('logistics_trips').update({ status }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {

@@ -32,7 +32,8 @@ export type UserRole =
   | 'tele_caller'
   | 'driver'
   | 'back_office'
-  | 'shift_employee';
+  | 'shift_employee'
+  | 'ff_operations_manager';
 
 // ── Role display labels ────────────────────────────────────────
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -66,13 +67,14 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   field_executive:        'Field Executive',
   tele_caller:            'Tele-Caller',
   driver:                 'Driver',
-  back_office:            'Back Office',
-  shift_employee:         'Shift Employee',
+  back_office:               'Back Office',
+  shift_employee:            'Shift Employee',
+  ff_operations_manager:     'FF Operations Manager',
 };
 
 // ── Role groupings ─────────────────────────────────────────────
 export const MANAGEMENT_ROLES: UserRole[] = ['ceo', 'director', 'Director', 'gm', 'gmo', 'smo', 'boi', 'nsm', 'admin'];
-export const OPERATIONS_ROLES: UserRole[] = ['purchase_manager', 'purchase_head', 'warehouse_manager', 'qc_manager', 'field_executive', 'tele_caller', 'driver', 'back_office'];
+export const OPERATIONS_ROLES: UserRole[] = ['purchase_manager', 'purchase_head', 'warehouse_manager', 'qc_manager', 'field_executive', 'tele_caller', 'driver', 'back_office', 'ff_operations_manager'];
 export const HUB_SCOPED_ROLES: UserRole[] = ['warehouse_manager', 'qc_manager', 'driver', 'field_executive'];
 
 

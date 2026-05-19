@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import {
   ArrowLeft, Package, User, MapPin, Phone, Truck,
   CheckCircle2, Clock, XCircle, Loader2, MessageCircle,
-  Printer, IndianRupee, Building2, ChevronRight, Share2
+  Printer, IndianRupee, Building2, ChevronRight, Share2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -41,7 +41,13 @@ export default function OrderDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('sales_orders')
-        .select(`*, customers!inner(id, name, phone, address, shop_name, area), sales_order_items!inner(id, qty_kg, quantity_kg, unit_price, qc_grade, grade, total_price, subtotal, products!inner(id, name, category, unit))`)
+        .select(`
+          *,
+          customers(id, name, phone, address, shop_name, area),
+          sales_order_items(id, product_name, qty_kg, quantity, quantity_kg, unit_price, qc_grade, grade, total_price, subtotal, unit,
+            products(id, name, category, unit)
+          )
+        `)
         .eq('id', id!)
         .single();
       if (error) throw error;
@@ -134,16 +140,16 @@ export default function OrderDetail() {
                   {items.map((item: any) => (
                     <tr key={item.id}>
                       <td className="px-5 py-3">
-                        <div className="font-bold text-slate-800">{item.products?.name}</div>
-                        <div className="text-[10px] text-slate-400 uppercase">{item.products?.category}</div>
+                        <div className="font-bold text-slate-800">{item.products?.name || item.product_name || '—'}</div>
+                        <div className="text-[10px] text-slate-400 uppercase">{item.products?.category || 'Custom'}</div>
                       </td>
                       <td className="px-5 py-3 text-right">
                         <span className={cn('px-2 py-0.5 rounded text-[10px] font-bold',
-                          item.qc_grade === 'A' ? 'bg-emerald-50 text-emerald-700' : item.qc_grade === 'B' ? 'bg-amber-50 text-amber-700' : 'bg-orange-50 text-orange-700')}>
-                          {GRADE_LABEL[item.qc_grade ?? item.grade]}
+                          (item.qc_grade ?? item.grade) === 'A' ? 'bg-emerald-50 text-emerald-700' : (item.qc_grade ?? item.grade) === 'B' ? 'bg-amber-50 text-amber-700' : 'bg-orange-50 text-orange-700')}>
+                          {GRADE_LABEL[item.qc_grade ?? item.grade] ?? (item.qc_grade ?? item.grade ?? '—')}
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-right font-bold text-slate-800">{item.qty_kg ?? item.quantity_kg} <span className="text-[10px] text-slate-400">{item.products?.unit || 'KG'}</span></td>
+                      <td className="px-5 py-3 text-right font-bold text-slate-800">{item.qty_kg ?? item.quantity ?? item.quantity_kg} <span className="text-[10px] text-slate-400">{item.unit || item.products?.unit || 'KG'}</span></td>
                       <td className="px-5 py-3 text-right text-slate-500">₹{item.unit_price}</td>
                       <td className="px-5 py-3 text-right font-bold text-slate-800">₹{(item.total_price ?? item.subtotal ?? 0).toLocaleString()}</td>
                     </tr>

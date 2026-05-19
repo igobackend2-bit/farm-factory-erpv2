@@ -4,7 +4,7 @@ import {
   Plus, ChevronDown, ChevronUp, ChevronRight, MoreHorizontal,
   Upload, Download, Settings2, RefreshCw, Maximize2, ArrowUpDown,
   ArrowUp, ArrowDown, Star, Check, X, Eye, EyeOff, Info,
-  Building2, Mail, Phone, Landmark,
+  Building2, Mail, Phone, Landmark, Search,
 } from 'lucide-react';
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -430,9 +430,6 @@ function NewVendorForm({ onCancel, onSave }: { onCancel: () => void; onSave: (v:
     { key: 'address',  label: 'Address' },
     { key: 'contacts', label: 'Contact Persons' },
     { key: 'bank',     label: 'Bank Details' },
-    { key: 'custom',   label: 'Custom Fields' },
-    { key: 'tags',     label: 'Reporting Tags' },
-    { key: 'remarks',  label: 'Remarks' },
   ];
 
   const inp = (placeholder: string, k: string, type = 'text', required = false) => (
@@ -522,27 +519,6 @@ function NewVendorForm({ onCancel, onSave }: { onCancel: () => void; onSave: (v:
           <div className="flex items-center gap-4">
             {label('Company Name')}
             {inp('', 'companyName')}
-          </div>
-
-          {/* Display Name */}
-          <div className="flex items-center gap-4">
-            {label('Display Name', true)}
-            <div className="relative flex-1">
-              <select
-                value={form.displayName}
-                onChange={e => set('displayName', e.target.value)}
-                className="w-full appearance-none px-3 py-2 text-[13px] rounded-lg outline-none"
-                style={{ border: '1.5px solid #BFDBFE', background: '#FFFFFF', color: form.displayName ? '#111827' : '#9CA3AF' }}>
-                <option value="">Select or type to add</option>
-                {[form.firstName, form.lastName, form.companyName]
-                  .filter(Boolean)
-                  .map(n => <option key={n}>{n}</option>)}
-                {form.firstName && form.lastName && (
-                  <option>{form.firstName} {form.lastName}</option>
-                )}
-              </select>
-              <ChevronDown className="absolute right-2.5 top-2.5 w-4 h-4 pointer-events-none" style={{ color: '#9CA3AF' }} />
-            </div>
           </div>
 
           {/* Email Address */}
@@ -735,48 +711,6 @@ function NewVendorForm({ onCancel, onSave }: { onCancel: () => void; onSave: (v:
             />
           )}
 
-          {/* Custom Fields */}
-          {tab === 'custom' && (
-            <div className="flex items-center justify-center py-16">
-              <p className="text-[13px] text-center max-w-md leading-relaxed" style={{ color: '#6B7280' }}>
-                Start adding custom fields for your Customers and Vendors by going to{' '}
-                <em>Settings → Preferences → Customers and Vendors</em>.{' '}
-                You can also refine the address format of your Customers and Vendors from there.
-              </p>
-            </div>
-          )}
-
-          {/* Reporting Tags */}
-          {tab === 'tags' && (
-            <div className="flex flex-col items-center justify-center py-16">
-              <p className="text-[13px]" style={{ color: '#6B7280' }}>
-                You've not created any Reporting Tags.
-              </p>
-              <p className="text-[13px] mt-1" style={{ color: '#6B7280' }}>
-                Start creating reporting tags by going to{' '}
-                <em>More Settings → Reporting Tags</em>
-              </p>
-            </div>
-          )}
-
-          {/* Remarks */}
-          {tab === 'remarks' && (
-            <div className="max-w-2xl">
-              <label className="block text-[13px] font-medium mb-2">
-                <span style={{ color: '#374151' }}>Remarks </span>
-                <span style={{ color: '#9CA3AF' }}>(For Internal Use)</span>
-              </label>
-              <textarea
-                rows={6}
-                value={form.remarks}
-                onChange={e => set('remarks', e.target.value)}
-                className="w-full px-3 py-2 text-[13px] rounded-lg outline-none resize-y"
-                style={{ border: '1.5px solid #BFDBFE', background: '#FFFFFF' }}
-                onFocus={e => (e.target.style.borderColor = '#2563EB')}
-                onBlur={e => (e.target.style.borderColor = '#BFDBFE')}
-              />
-            </div>
-          )}
         </div>
       </div>
 
@@ -808,21 +742,58 @@ function NewVendorForm({ onCancel, onSave }: { onCancel: () => void; onSave: (v:
 type ImportStep = 1 | 2 | 3;
 type DuplicateMode = 'skip' | 'overwrite' | 'add';
 
-const VENDOR_FIELDS = [
-  '— Do not import —',
-  'Display Name', 'First Name', 'Last Name', 'Company Name',
-  'Email', 'Work Phone', 'Mobile', 'Currency',
-  'Payment Terms', 'GST Treatment', 'GSTIN',
-  'PAN', 'Billing Address', 'Shipping Address',
-  'Notes',
+// Maps CSV column label → vendor object key
+const FIELD_MAP_OPTIONS = [
+  { label: '— Do not import —', key: '' },
+  { label: 'Company Name',      key: 'companyName' },
+  { label: 'First Name',        key: 'firstName' },
+  { label: 'Last Name',         key: 'lastName' },
+  { label: 'Email',             key: 'email' },
+  { label: 'Work Phone',        key: 'workPhone' },
+  { label: 'Mobile',            key: 'mobile' },
+  { label: 'GSTIN',             key: 'gstin' },
+  { label: 'PAN',               key: 'pan' },
+  { label: 'Address Street',    key: 'street1' },
+  { label: 'City',              key: 'city' },
+  { label: 'State',             key: 'state' },
+  { label: 'Pin Code',          key: 'pinCode' },
+  { label: 'Remarks / Notes',   key: 'remarks' },
 ];
 
-const SAMPLE_CSV_COLUMNS = [
-  'Vendor Name', 'Company', 'Email', 'Phone', 'Mobile',
-  'GST Number', 'PAN', 'Address', 'City', 'State', 'Pin Code',
-];
+// Auto-map: guess field key from column header
+function autoGuess(colHeader: string): string {
+  const h = colHeader.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (h.includes('company') || h.includes('vendor') || h.includes('shop')) return 'companyName';
+  if (h.includes('firstname') || h === 'fname') return 'firstName';
+  if (h.includes('lastname')  || h === 'lname') return 'lastName';
+  if (h.includes('email') || h.includes('mail')) return 'email';
+  if (h.includes('workphone') || h.includes('office') || h.includes('landline')) return 'workPhone';
+  if (h.includes('mobile') || h.includes('cell') || h.includes('phone')) return 'mobile';
+  if (h.includes('gstin') || h.includes('gst') || h.includes('gstnumber')) return 'gstin';
+  if (h === 'pan' || h.includes('pannumber')) return 'pan';
+  if (h.includes('address') || h.includes('street')) return 'street1';
+  if (h.includes('city')) return 'city';
+  if (h.includes('state')) return 'state';
+  if (h.includes('pin') || h.includes('zip') || h.includes('postal')) return 'pinCode';
+  if (h.includes('remark') || h.includes('note')) return 'remarks';
+  return '';
+}
 
-function ImportVendorsWizard({ onClose }: { onClose: () => void }) {
+// Download sample CSV template
+function downloadSampleCSV() {
+  const rows = [
+    ['Company Name', 'First Name', 'Last Name', 'Email', 'Work Phone', 'Mobile', 'GSTIN', 'PAN', 'Address Street', 'City', 'State', 'Pin Code', 'Remarks / Notes'],
+    ['Ravi Farms', 'Ravi', 'Kumar', 'ravi@ravifarms.com', '04428001234', '9876543210', '33AABCR1234F1Z5', 'AABCR1234F', '123 Palikarani Main Road', 'Chennai', 'Tamil Nadu', '600100', 'Primary supplier'],
+    ['AK Traders', 'Abdul', 'Karim', 'ak@aktraders.com', '04428009012', '9754321012', '33CCGAK9012H3Z7', 'CCGAK9012H', '78 Koyambedu Market', 'Chennai', 'Tamil Nadu', '600107', ''],
+  ];
+  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'vendor_import_sample.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ImportVendorsWizard({ onClose, onImported }: { onClose: () => void; onImported: (vendors: any[]) => void }) {
   const [step, setStep] = useState<ImportStep>(1);
   const [dragOver, setDragOver] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -833,12 +804,67 @@ function ImportVendorsWizard({ onClose }: { onClose: () => void }) {
   const chooseRef = useRef<HTMLDivElement>(null);
   useOutsideClick(chooseRef, () => setShowChooseMenu(false));
 
-  // Step 2: field mapping — maps CSV column → vendor field
-  const [mapping, setMapping] = useState<Record<string, string>>(
-    Object.fromEntries(SAMPLE_CSV_COLUMNS.map((col, i) => [col, VENDOR_FIELDS[i + 1] || '— Do not import —']))
-  );
+  // Parsed file data
+  const [fileHeaders, setFileHeaders] = useState<string[]>([]);
+  const [fileRows, setFileRows] = useState<Record<string, string>[]>([]);
+  const [parseError, setParseError] = useState('');
 
-  const handleFile = (f: File) => { setFile(f); };
+  // Step 2: column → vendor field key mapping
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+
+  // Step 3: validated preview rows
+  interface PreviewRow { raw: Record<string, string>; mapped: Record<string, string>; status: 'valid' | 'warning' | 'error'; issues: string[] }
+  const [preview, setPreview] = useState<PreviewRow[]>([]);
+
+  const handleFile = async (f: File) => {
+    setFile(f); setParseError('');
+    try {
+      let headers: string[] = [];
+      let rows: Record<string, string>[] = [];
+
+      const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
+
+      if (ext === 'csv' || ext === 'tsv') {
+        // Use PapaParse for CSV/TSV
+        const Papa = (await import('papaparse')).default;
+        const text = await f.text();
+        const result = Papa.parse<Record<string, string>>(text, {
+          header: true, skipEmptyLines: true,
+          delimiter: ext === 'tsv' ? '\t' : undefined,
+        });
+        headers = result.meta.fields ?? [];
+        rows = result.data;
+      } else if (ext === 'xls' || ext === 'xlsx') {
+        // Use XLSX for Excel
+        const XLSX = await import('xlsx');
+        const buffer = await f.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const jsonData: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        if (jsonData.length < 2) { setParseError('File is empty or has no data rows.'); return; }
+        headers = (jsonData[0] as string[]).map(h => String(h ?? '').trim());
+        rows = jsonData.slice(1).map(row => {
+          const obj: Record<string, string> = {};
+          headers.forEach((h, i) => { obj[h] = String(row[i] ?? '').trim(); });
+          return obj;
+        }).filter(r => Object.values(r).some(v => v));
+      } else {
+        setParseError('Unsupported file format. Use CSV, TSV, XLS, or XLSX.');
+        return;
+      }
+
+      if (!headers.length) { setParseError('Could not detect column headers in the file.'); return; }
+
+      setFileHeaders(headers);
+      setFileRows(rows);
+      // Auto-map columns
+      const autoMapping: Record<string, string> = {};
+      headers.forEach(h => { autoMapping[h] = autoGuess(h); });
+      setMapping(autoMapping);
+    } catch (err: any) {
+      setParseError(`Error reading file: ${err?.message ?? 'Unknown error'}`);
+    }
+  };
 
   const STEPS = [
     { n: 1, label: 'Configure' },
@@ -962,13 +988,18 @@ function ImportVendorsWizard({ onClose }: { onClose: () => void }) {
         </p>
       </div>
 
+      {/* Parse error */}
+      {parseError && (
+        <div className="mb-4 px-4 py-3 rounded-xl text-[13px] font-medium" style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>
+          ⚠ {parseError}
+        </div>
+      )}
+
       {/* Sample links */}
       <p className="text-[13px] mb-6" style={{ color: '#374151' }}>
         Download a{' '}
-        <span className="font-semibold cursor-pointer" style={{ color: '#2563EB' }}>sample csv file</span>
-        {' '}or{' '}
-        <span className="font-semibold cursor-pointer" style={{ color: '#2563EB' }}>sample xls file</span>
-        {' '}and compare it to your import file to ensure you have the file perfect for the import.
+        <span className="font-semibold cursor-pointer" style={{ color: '#2563EB' }} onClick={downloadSampleCSV}>sample csv file</span>
+        {' '}and compare it to your import file to ensure the format is correct.
       </p>
 
       {/* Duplicate Handling */}
@@ -1043,79 +1074,93 @@ function ImportVendorsWizard({ onClose }: { onClose: () => void }) {
   /* ── Step 2: Map Fields ── */
   const Step2 = () => (
     <div className="flex-1 overflow-y-auto px-10 py-6">
-      <p className="text-[13px] mb-5" style={{ color: '#6B7280' }}>
-        Match the columns from your file to the corresponding vendor fields. Unmapped columns will be ignored.
+      <p className="text-[13px] mb-1" style={{ color: '#6B7280' }}>
+        Match each column from your file to the correct vendor field. Columns auto-matched are highlighted.
+      </p>
+      <p className="text-[12px] mb-5" style={{ color: '#9CA3AF' }}>
+        {fileRows.length} rows detected · {fileHeaders.length} columns
       </p>
       <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E5E7EB' }}>
         <table className="w-full">
           <thead>
             <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
-              <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#6B7280' }}>
-                COLUMN FROM FILE
-              </th>
-              <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#6B7280' }}>
-                MAP TO VENDOR FIELD
-              </th>
-              <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#6B7280' }}>
-                SAMPLE DATA
-              </th>
+              <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#6B7280' }}>COLUMN FROM FILE</th>
+              <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#6B7280' }}>MAP TO VENDOR FIELD</th>
+              <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#6B7280' }}>SAMPLE DATA</th>
             </tr>
           </thead>
           <tbody>
-            {SAMPLE_CSV_COLUMNS.map((col, i) => (
-              <tr key={col} style={{ borderBottom: '1px solid #F3F4F6', background: i % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
-                <td className="px-5 py-3 text-[13px] font-medium" style={{ color: '#111827' }}>{col}</td>
-                <td className="px-5 py-3">
-                  <div className="relative">
-                    <select
-                      value={mapping[col] || '— Do not import —'}
-                      onChange={e => setMapping(m => ({ ...m, [col]: e.target.value }))}
-                      className="w-full appearance-none px-3 py-1.5 pr-7 text-[13px] rounded-lg outline-none"
-                      style={{
-                        border: '1.5px solid #E5E7EB',
-                        background: mapping[col] === '— Do not import —' ? '#FAFAFA' : '#EFF6FF',
-                        color: mapping[col] === '— Do not import —' ? '#9CA3AF' : '#2563EB',
-                        fontWeight: mapping[col] === '— Do not import —' ? 400 : 600,
-                      }}>
-                      {VENDOR_FIELDS.map(f => <option key={f} value={f}>{f}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 pointer-events-none" style={{ color: '#9CA3AF' }} />
-                  </div>
-                </td>
-                <td className="px-5 py-3 text-[12px]" style={{ color: '#9CA3AF' }}>
-                  {['Ravi Farms', 'Green Harvest Pvt Ltd', 'ravi@example.com', '+91 9876543210', '+91 9123456789',
-                    '29AABCU9603R1ZX', 'ABCDE1234F', '45 Market Road, Chennai', 'Chennai', 'Tamil Nadu', '600001'][i]}
-                </td>
-              </tr>
-            ))}
+            {fileHeaders.map((col, i) => {
+              const mapped = mapping[col] || '';
+              const sample = fileRows[0]?.[col] ?? '';
+              return (
+                <tr key={col} style={{ borderBottom: '1px solid #F3F4F6', background: i % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
+                  <td className="px-5 py-3 text-[13px] font-semibold" style={{ color: '#111827' }}>{col}</td>
+                  <td className="px-5 py-3">
+                    <div className="relative">
+                      <select
+                        value={mapped}
+                        onChange={e => setMapping(m => ({ ...m, [col]: e.target.value }))}
+                        className="w-full appearance-none px-3 py-1.5 pr-7 text-[13px] rounded-lg outline-none"
+                        style={{
+                          border: `1.5px solid ${mapped ? '#2563EB' : '#E5E7EB'}`,
+                          background: mapped ? '#EFF6FF' : '#FAFAFA',
+                          color: mapped ? '#2563EB' : '#9CA3AF',
+                          fontWeight: mapped ? 600 : 400,
+                        }}>
+                        {FIELD_MAP_OPTIONS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 pointer-events-none" style={{ color: '#9CA3AF' }} />
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-[12px] max-w-[160px] truncate" style={{ color: '#9CA3AF' }} title={sample}>
+                    {sample || <span style={{ color: '#D1D5DB' }}>—</span>}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
     </div>
   );
 
+  /* ── Build preview when entering Step 3 ── */
+  const buildPreview = () => {
+    const rows: any[] = fileRows.map(raw => {
+      const mapped: Record<string, string> = {};
+      Object.entries(mapping).forEach(([col, key]) => { if (key) mapped[key] = raw[col] ?? ''; });
+      const issues: string[] = [];
+      if (!mapped.companyName && !mapped.firstName) issues.push('Company or First Name required');
+      if (mapped.gstin && mapped.gstin.length !== 15) issues.push('GSTIN should be 15 characters');
+      if (mapped.pan && mapped.pan.length !== 10) issues.push('PAN should be 10 characters');
+      const status = issues.some(i => i.includes('required')) ? 'error'
+        : issues.length > 0 ? 'warning' : 'valid';
+      return { raw, mapped, status, issues };
+    });
+    setPreview(rows);
+  };
+
   /* ── Step 3: Preview ── */
   const Step3 = () => {
-    const previewData = [
-      { name: 'Ravi Farms', company: 'Ravi Farms', email: 'ravi@example.com', phone: '+91 9876543210', gst: '29AABCU9603R1ZX', status: 'valid' },
-      { name: 'Green Harvest Pvt Ltd', company: 'Green Harvest Pvt Ltd', email: 'info@greenharvest.com', phone: '+91 9123456789', gst: '27AABCG9876R1Z5', status: 'valid' },
-      { name: 'Kumar Produce', company: 'Kumar Produce', email: 'kumar@produce.in', phone: '+91 9988776655', gst: '', status: 'warning' },
-      { name: 'Fresh Agro Co.', company: 'Fresh Agro Co.', email: '', phone: '+91 8877665544', gst: '33AABCF5432R1Z9', status: 'error' },
-    ];
+    const valid   = preview.filter(r => r.status === 'valid').length;
+    const warning = preview.filter(r => r.status === 'warning').length;
+    const error   = preview.filter(r => r.status === 'error').length;
 
     return (
       <div className="flex-1 overflow-y-auto px-10 py-6">
         {/* Summary */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-4 gap-4 mb-6">
           {[
-            { label: 'Total Records', value: '4', color: '#374151', bg: '#F9FAFB' },
-            { label: 'Valid Records', value: '2', color: '#16A34A', bg: '#F0FDF4' },
-            { label: 'Records with Issues', value: '2', color: '#EF4444', bg: '#FEF2F2' },
+            { label: 'Total Records',   value: preview.length, color: '#374151', bg: '#F9FAFB' },
+            { label: 'Ready to Import', value: valid + warning, color: '#16A34A', bg: '#F0FDF4' },
+            { label: 'Warnings',        value: warning, color: '#D97706', bg: '#FFFBEB' },
+            { label: 'Errors (skipped)', value: error, color: '#EF4444', bg: '#FEF2F2' },
           ].map(s => (
             <div key={s.label} className="rounded-xl p-4 text-center"
               style={{ background: s.bg, border: `1px solid ${s.bg === '#F9FAFB' ? '#E5E7EB' : s.color + '30'}` }}>
               <p className="text-[28px] font-bold" style={{ color: s.color }}>{s.value}</p>
-              <p className="text-[12px] font-medium mt-0.5" style={{ color: '#6B7280' }}>{s.label}</p>
+              <p className="text-[11px] font-medium mt-0.5" style={{ color: '#6B7280' }}>{s.label}</p>
             </div>
           ))}
         </div>
@@ -1125,52 +1170,52 @@ function ImportVendorsWizard({ onClose }: { onClose: () => void }) {
           <table className="w-full">
             <thead>
               <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                <th className="w-8 px-4 py-3" />
-                {['VENDOR NAME', 'COMPANY', 'EMAIL', 'PHONE', 'GST NUMBER', 'STATUS'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider"
-                    style={{ color: '#6B7280' }}>{h}</th>
+                <th className="w-8 px-4 py-3 text-[11px] font-semibold" style={{ color: '#6B7280' }}>#</th>
+                {['VENDOR / COMPANY', 'EMAIL', 'MOBILE', 'GSTIN', 'CITY', 'STATUS'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#6B7280' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {previewData.map((row, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #F3F4F6', background: i % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
-                  <td className="px-4 py-3 text-[13px] font-medium" style={{ color: '#9CA3AF' }}>{i + 1}</td>
-                  <td className="px-4 py-3 text-[13px] font-semibold" style={{ color: '#111827' }}>{row.name}</td>
-                  <td className="px-4 py-3 text-[13px]" style={{ color: '#6B7280' }}>{row.company}</td>
-                  <td className="px-4 py-3 text-[13px]" style={{ color: row.email ? '#6B7280' : '#FCA5A5' }}>
-                    {row.email || <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: '#FEF2F2', color: '#EF4444' }}>Missing</span>}
-                  </td>
-                  <td className="px-4 py-3 text-[13px]" style={{ color: '#6B7280' }}>{row.phone}</td>
-                  <td className="px-4 py-3 text-[13px]" style={{ color: '#6B7280' }}>{row.gst || '—'}</td>
-                  <td className="px-4 py-3">
-                    {row.status === 'valid' && (
-                      <span className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                        style={{ background: '#F0FDF4', color: '#16A34A' }}>
-                        <Check className="w-3 h-3" /> Valid
-                      </span>
-                    )}
-                    {row.status === 'warning' && (
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                        style={{ background: '#FFFBEB', color: '#D97706' }}>
-                        ⚠ Optional Missing
-                      </span>
-                    )}
-                    {row.status === 'error' && (
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                        style={{ background: '#FEF2F2', color: '#EF4444' }}>
-                        ✕ Required Missing
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {preview.map((row, i) => {
+                const m = row.mapped;
+                const name = m.companyName || `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || '—';
+                return (
+                  <tr key={i} style={{ borderBottom: '1px solid #F3F4F6', background: i % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
+                    <td className="px-4 py-3 text-[12px]" style={{ color: '#9CA3AF' }}>{i + 1}</td>
+                    <td className="px-4 py-3 text-[13px] font-semibold" style={{ color: '#111827' }}>{name}</td>
+                    <td className="px-4 py-3 text-[13px]" style={{ color: m.email ? '#6B7280' : '#FCA5A5' }}>
+                      {m.email || <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ background: '#FEF2F2', color: '#EF4444' }}>—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-[13px]" style={{ color: '#6B7280' }}>{m.mobile || m.workPhone || '—'}</td>
+                    <td className="px-4 py-3 text-[13px]" style={{ color: '#6B7280' }}>{m.gstin || '—'}</td>
+                    <td className="px-4 py-3 text-[13px]" style={{ color: '#6B7280' }}>{m.city || '—'}</td>
+                    <td className="px-4 py-3">
+                      {row.status === 'valid' && (
+                        <span className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: '#F0FDF4', color: '#16A34A' }}>
+                          <Check className="w-3 h-3" /> Valid
+                        </span>
+                      )}
+                      {row.status === 'warning' && (
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" title={row.issues.join(', ')} style={{ background: '#FFFBEB', color: '#D97706' }}>
+                          ⚠ Warning
+                        </span>
+                      )}
+                      {row.status === 'error' && (
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" title={row.issues.join(', ')} style={{ background: '#FEF2F2', color: '#EF4444' }}>
+                          ✕ Skipped
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-
         <p className="text-[12px] mt-4" style={{ color: '#6B7280' }}>
-          Only <strong>valid</strong> and <strong>warning</strong> records will be imported. Error records will be skipped.
+          <strong>Valid</strong> and <strong>warning</strong> records will be imported. Error records are skipped.
+          Hover the status badge to see the issue.
         </p>
       </div>
     );
@@ -1229,18 +1274,395 @@ function ImportVendorsWizard({ onClose }: { onClose: () => void }) {
             </button>
             <button
               onClick={() => {
-                if (step < 3) setStep(s => (s + 1) as ImportStep);
-                else { onClose(); }
+                if (step === 1) {
+                  if (!file) { alert('Please select a file first.'); return; }
+                  if (parseError) { alert('Fix the file error before proceeding.'); return; }
+                  if (!fileHeaders.length) { alert('File has not been parsed yet. Please re-select it.'); return; }
+                  setStep(2);
+                } else if (step === 2) {
+                  buildPreview();
+                  setStep(3);
+                } else {
+                  // ── Step 3: Do the actual import ──
+                  const existing = loadVendors();
+                  const toImport = preview.filter(r => r.status !== 'error');
+                  const newVendors: any[] = [];
+
+                  toImport.forEach(row => {
+                    const m = row.mapped;
+                    const name = m.companyName || `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim();
+                    const isDup = existing.some(v =>
+                      (v.companyName || '').toLowerCase() === name.toLowerCase() ||
+                      (v.email || '').toLowerCase() === (m.email || '').toLowerCase()
+                    );
+
+                    if (isDup && dupMode === 'skip') return;
+
+                    const vendor: any = {
+                      id: crypto.randomUUID(),
+                      companyName: m.companyName || '',
+                      firstName: m.firstName || '',
+                      lastName: m.lastName || '',
+                      email: m.email || '',
+                      workPhone: m.workPhone || '',
+                      mobile: m.mobile || '',
+                      gstin: m.gstin || '',
+                      pan: m.pan || '',
+                      isMsme: false,
+                      currency: 'INR- Indian Rupee',
+                      language: 'English',
+                      billing: {
+                        attention: '', country: 'India',
+                        street1: m.street1 || '',
+                        street2: '',
+                        city: m.city || '',
+                        state: m.state || '',
+                        pinCode: m.pinCode || '',
+                        phone: m.mobile || m.workPhone || '',
+                        fax: '',
+                      },
+                      shipping: { attention: '', country: 'India', street1: '', street2: '', city: '', state: '', pinCode: '', phone: '', fax: '' },
+                      contacts: [],
+                      banks: [],
+                      remarks: m.remarks || '',
+                    };
+
+                    if (isDup && dupMode === 'overwrite') {
+                      const idx = existing.findIndex(v =>
+                        (v.companyName || '').toLowerCase() === name.toLowerCase()
+                      );
+                      if (idx >= 0) { existing[idx] = { ...existing[idx], ...vendor, id: existing[idx].id }; }
+                    } else {
+                      newVendors.push(vendor);
+                    }
+                  });
+
+                  const final = [...existing, ...newVendors];
+                  persistVendors(final);
+                  onImported(final);
+                  toast.success(`✓ Imported ${toImport.length} vendors successfully!`);
+                  onClose();
+                }
               }}
               className="flex items-center gap-1.5 px-6 py-2 rounded-lg text-[13px] font-semibold text-white transition-colors"
               style={{ background: '#16A34A' }}
               onMouseEnter={e => (e.currentTarget.style.background = '#15803D')}
               onMouseLeave={e => (e.currentTarget.style.background = '#16A34A')}>
-              {step === 3 ? '✓ Import' : 'Next ›'}
+              {step === 3 ? '✓ Import Now' : 'Next ›'}
             </button>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ─── Vendor Dashboard (list view) ──────────────────────────────────────── */
+function VendorDashboard({ vendors, onNew, onImport }: {
+  vendors: any[];
+  onNew: () => void;
+  onImport: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [rowKebab, setRowKebab] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 10;
+
+  const filtered = vendors.filter(v => {
+    const name = (v.displayName || `${v.firstName} ${v.lastName}`).toLowerCase();
+    const matchSearch = name.includes(search.toLowerCase()) ||
+      (v.companyName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (v.email || '').toLowerCase().includes(search.toLowerCase());
+    return matchSearch;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  const toggleSelect = (id: string) =>
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const allSelected = paginated.length > 0 && paginated.every(v => selected.has(v.id));
+
+  // Stats
+  const totalPayables = 0; // placeholder
+  const activeCount = vendors.length; // treat all as active for now
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+
+      {/* ── Stats bar ── */}
+      <div className="grid grid-cols-3 gap-4 px-6 py-4"
+        style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
+        {[
+          { label: 'Total Vendors',         value: vendors.length,  icon: Building2, color: '#2563EB', bg: '#EFF6FF' },
+          { label: 'Active Vendors',         value: activeCount,     icon: Check,     color: '#16A34A', bg: '#F0FDF4' },
+          { label: 'Payables Outstanding',   value: '₹0.00',         icon: Landmark,  color: '#D97706', bg: '#FFFBEB' },
+        ].map(s => {
+          const Icon = s.icon;
+          return (
+            <div key={s.label} className="flex items-center gap-4 p-4 rounded-xl"
+              style={{ background: s.bg, border: `1px solid ${s.color}20` }}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: s.color + '20' }}>
+                <Icon className="w-5 h-5" style={{ color: s.color }} />
+              </div>
+              <div>
+                <p className="text-[22px] font-bold leading-tight" style={{ color: '#111827' }}>
+                  {s.value}
+                </p>
+                <p className="text-[12px]" style={{ color: '#6B7280' }}>{s.label}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Sub-toolbar: search + filter tabs ── */}
+      <div className="flex items-center justify-between px-6 py-3 gap-4"
+        style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
+
+        {/* Status tabs */}
+        <div className="flex gap-1">
+          {(['All', 'Active', 'Inactive'] as const).map(f => (
+            <button key={f} onClick={() => setStatusFilter(f)}
+              className="px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors"
+              style={{
+                background: statusFilter === f ? '#EFF6FF' : 'transparent',
+                color: statusFilter === f ? '#2563EB' : '#6B7280',
+                border: statusFilter === f ? '1.5px solid #BFDBFE' : '1.5px solid transparent',
+              }}>
+              {f}
+              <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full"
+                style={{ background: statusFilter === f ? '#2563EB' : '#F3F4F6', color: statusFilter === f ? '#FFFFFF' : '#9CA3AF' }}>
+                {f === 'All' ? vendors.length : f === 'Active' ? activeCount : 0}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Right: search + actions */}
+        <div className="flex items-center gap-2">
+          {/* Search */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+            style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', minWidth: '220px' }}>
+            <Search className="w-3.5 h-3.5 shrink-0" style={{ color: '#9CA3AF' }} />
+            <input
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search vendors..."
+              className="text-[13px] outline-none bg-transparent flex-1"
+              style={{ color: '#111827' }}
+            />
+            {search && (
+              <button onClick={() => setSearch('')}>
+                <X className="w-3.5 h-3.5" style={{ color: '#9CA3AF' }} />
+              </button>
+            )}
+          </div>
+
+          {/* Bulk delete (when selected) */}
+          {selected.size > 0 && (
+            <span className="text-[12px] px-3 py-1.5 rounded-lg font-medium"
+              style={{ background: '#FEF2F2', color: '#EF4444', border: '1px solid #FECACA' }}>
+              {selected.size} selected
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ── Table ── */}
+      <div className="flex-1 overflow-auto">
+        <table className="w-full">
+          <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+            <tr style={{ background: '#F9FAFB', borderBottom: '2px solid #E5E7EB' }}>
+              <th className="w-10 px-4 py-3">
+                <input type="checkbox" className="w-3.5 h-3.5 rounded accent-blue-600"
+                  checked={allSelected}
+                  onChange={e => setSelected(e.target.checked ? new Set(paginated.map(v => v.id)) : new Set())}
+                />
+              </th>
+              {[
+                { label: 'VENDOR NAME',   cls: 'text-left' },
+                { label: 'COMPANY',       cls: 'text-left' },
+                { label: 'EMAIL',         cls: 'text-left' },
+                { label: 'PHONE',         cls: 'text-left' },
+                { label: 'PAYABLES',      cls: 'text-right' },
+                { label: 'STATUS',        cls: 'text-left' },
+              ].map(h => (
+                <th key={h.label}
+                  className={`${h.cls} px-4 py-3 text-[11px] font-semibold uppercase tracking-wider`}
+                  style={{ color: '#6B7280' }}>
+                  {h.label}
+                </th>
+              ))}
+              <th className="w-12 px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {paginated.map((v, idx) => (
+              <tr key={v.id}
+                className="group transition-colors cursor-pointer"
+                style={{
+                  background: selected.has(v.id) ? '#EFF6FF' : idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
+                  borderBottom: '1px solid #F3F4F6',
+                }}
+                onMouseEnter={e => { if (!selected.has(v.id)) (e.currentTarget as HTMLElement).style.background = '#F8FAFF'; }}
+                onMouseLeave={e => { if (!selected.has(v.id)) (e.currentTarget as HTMLElement).style.background = idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA'; }}>
+
+                {/* Checkbox */}
+                <td className="px-4 py-3.5">
+                  <input type="checkbox" className="w-3.5 h-3.5 rounded accent-blue-600"
+                    checked={selected.has(v.id)}
+                    onChange={() => toggleSelect(v.id)} />
+                </td>
+
+                {/* Vendor Name */}
+                <td className="px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    {/* Avatar circle with initials */}
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-[12px] font-bold"
+                      style={{ background: '#EFF6FF', color: '#2563EB' }}>
+                      {(v.displayName || v.firstName || 'V').charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-semibold" style={{ color: '#111827' }}>
+                        {v.displayName || `${v.firstName} ${v.lastName}`.trim() || '—'}
+                      </p>
+                      {v.pan && (
+                        <p className="text-[11px]" style={{ color: '#9CA3AF' }}>PAN: {v.pan}</p>
+                      )}
+                    </div>
+                  </div>
+                </td>
+
+                {/* Company */}
+                <td className="px-4 py-3.5 text-[13px]" style={{ color: '#6B7280' }}>
+                  {v.companyName || '—'}
+                </td>
+
+                {/* Email */}
+                <td className="px-4 py-3.5 text-[13px]" style={{ color: '#6B7280' }}>
+                  {v.email
+                    ? <a href={`mailto:${v.email}`} className="hover:underline" style={{ color: '#2563EB' }}>{v.email}</a>
+                    : '—'}
+                </td>
+
+                {/* Phone */}
+                <td className="px-4 py-3.5 text-[13px]" style={{ color: '#6B7280' }}>
+                  {v.workPhone || v.mobile || '—'}
+                </td>
+
+                {/* Payables */}
+                <td className="px-4 py-3.5 text-right text-[13px] font-mono font-semibold" style={{ color: '#374151' }}>
+                  ₹0.00
+                </td>
+
+                {/* Status */}
+                <td className="px-4 py-3.5">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                    style={{ background: '#F0FDF4', color: '#16A34A' }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                    Active
+                  </span>
+                </td>
+
+                {/* Row kebab */}
+                <td className="px-4 py-3.5 relative">
+                  <div className="relative">
+                    <button
+                      onClick={e => { e.stopPropagation(); setRowKebab(rowKebab === v.id ? null : v.id); }}
+                      className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{ border: '1px solid #E5E7EB', background: '#FFFFFF' }}>
+                      <MoreHorizontal className="w-4 h-4" style={{ color: '#6B7280' }} />
+                    </button>
+                    {rowKebab === v.id && (
+                      <div className="absolute right-0 top-8 z-50 rounded-xl shadow-xl overflow-hidden w-40"
+                        style={{ background: '#FFFFFF', border: '1px solid #E5E7EB' }}>
+                        {[
+                          { label: 'View Details', icon: Eye },
+                          { label: 'Edit Vendor', icon: Building2 },
+                          { label: 'Send Email',   icon: Mail },
+                        ].map(item => {
+                          const Icon = item.icon;
+                          return (
+                            <button key={item.label}
+                              onClick={() => setRowKebab(null)}
+                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-left hover:bg-gray-50 transition-colors"
+                              style={{ color: '#374151' }}>
+                              <Icon className="w-3.5 h-3.5" style={{ color: '#6B7280' }} />
+                              {item.label}
+                            </button>
+                          );
+                        })}
+                        <div style={{ borderTop: '1px solid #F3F4F6' }} />
+                        <button
+                          onClick={() => setRowKebab(null)}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-left hover:bg-red-50 transition-colors"
+                          style={{ color: '#EF4444' }}>
+                          <X className="w-3.5 h-3.5" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* No results */}
+        {filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+              style={{ background: '#EFF6FF' }}>
+              <Building2 className="w-7 h-7" style={{ color: '#2563EB' }} />
+            </div>
+            <p className="text-[15px] font-semibold mb-1" style={{ color: '#374151' }}>No vendors found</p>
+            <p className="text-[13px]" style={{ color: '#9CA3AF' }}>Try adjusting your search or filter</p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Pagination ── */}
+      {filtered.length > PER_PAGE && (
+        <div className="flex items-center justify-between px-6 py-3"
+          style={{ background: '#FFFFFF', borderTop: '1px solid #E5E7EB' }}>
+          <p className="text-[12px]" style={{ color: '#6B7280' }}>
+            Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filtered.length)} of {filtered.length} vendors
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage(p => p - 1)}
+              className="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors disabled:opacity-40"
+              style={{ border: '1px solid #E5E7EB', color: '#374151', background: '#FFFFFF' }}>
+              ‹ Prev
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              <button key={p} onClick={() => setPage(p)}
+                className="w-8 h-8 rounded-lg text-[12px] font-medium transition-colors"
+                style={{
+                  background: page === p ? '#2563EB' : '#FFFFFF',
+                  color: page === p ? '#FFFFFF' : '#374151',
+                  border: `1px solid ${page === p ? '#2563EB' : '#E5E7EB'}`,
+                }}>
+                {p}
+              </button>
+            ))}
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage(p => p + 1)}
+              className="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors disabled:opacity-40"
+              style={{ border: '1px solid #E5E7EB', color: '#374151', background: '#FFFFFF' }}>
+              Next ›
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1252,8 +1674,101 @@ const VIEW_FILTERS: { key: VendorFilter; label: string }[] = [
   { key: 'Inactive', label: 'Inactive' },
 ];
 
+/* ─── Demo Vendor Seed ────────────────────────────────────────────────────── */
+const VENDOR_STORE_KEY = 'ff_erp_vendors_v1';
+
+const DEMO_VENDORS = [
+  {
+    id: 'V001', salutation: 'Mr.', firstName: 'Ravi', lastName: 'Kumar',
+    companyName: 'Ravi Farms', email: 'ravi@ravifarms.com',
+    workPhone: '04428001234', mobile: '9876543210', language: 'English',
+    pan: 'AABCR1234F', gstin: '33AABCR1234F1Z5', isMsme: false,
+    currency: 'INR- Indian Rupee',
+    billing: { attention: 'Ravi Kumar', country: 'India', street1: '123, Palikarani Main Road', street2: '', city: 'Chennai', state: 'Tamil Nadu', pinCode: '600100', phone: '9876543210', fax: '' },
+    shipping: { attention: '', country: 'India', street1: '', street2: '', city: '', state: '', pinCode: '', phone: '', fax: '' },
+    contacts: [],
+    banks: [{ accountName: 'Ravi Kumar', bankName: 'State Bank of India', accountNumber: '00001234567890', confirmAccountNumber: '00001234567890', ifscCode: 'SBIN0001234', accountType: 'Current', branchName: 'Palikarani Branch', upiId: 'ravi@sbi' }],
+    remarks: 'Primary onion & tomato supplier. Reliable delivery.',
+  },
+  {
+    id: 'V002', salutation: 'Mr.', firstName: 'Anand', lastName: 'Krishnan',
+    companyName: 'Fresh Vendors Co.', email: 'anand@freshvendors.com',
+    workPhone: '04428005678', mobile: '9865432101', language: 'English',
+    pan: 'BBCFV5678G', gstin: '33BBCFV5678G2Z6', isMsme: true,
+    currency: 'INR- Indian Rupee',
+    billing: { attention: 'Anand Krishnan', country: 'India', street1: '45, T Nagar 2nd Street', street2: 'Near Panagal Park', city: 'Chennai', state: 'Tamil Nadu', pinCode: '600017', phone: '9865432101', fax: '' },
+    shipping: { attention: '', country: 'India', street1: '', street2: '', city: '', state: '', pinCode: '', phone: '', fax: '' },
+    contacts: [],
+    banks: [{ accountName: 'Anand Krishnan', bankName: 'HDFC Bank', accountNumber: '50100234567891', confirmAccountNumber: '50100234567891', ifscCode: 'HDFC0002345', accountType: 'Current', branchName: 'T Nagar Branch', upiId: 'anand@hdfc' }],
+    remarks: 'Tomato and leafy vegetable supplier. MSME registered.',
+  },
+  {
+    id: 'V003', salutation: 'Mr.', firstName: 'Abdul', lastName: 'Karim',
+    companyName: 'AK Traders', email: 'ak@aktraders.com',
+    workPhone: '04428009012', mobile: '9754321012', language: 'English',
+    pan: 'CCGAK9012H', gstin: '33CCGAK9012H3Z7', isMsme: false,
+    currency: 'INR- Indian Rupee',
+    billing: { attention: 'Abdul Karim', country: 'India', street1: '78, Koyambedu Market Complex', street2: 'Stall No. 34', city: 'Chennai', state: 'Tamil Nadu', pinCode: '600107', phone: '9754321012', fax: '' },
+    shipping: { attention: '', country: 'India', street1: '', street2: '', city: '', state: '', pinCode: '', phone: '', fax: '' },
+    contacts: [],
+    banks: [{ accountName: 'Abdul Karim', bankName: 'Indian Bank', accountNumber: '6093234567892', confirmAccountNumber: '6093234567892', ifscCode: 'IDIB000K001', accountType: 'Current', branchName: 'Koyambedu Branch', upiId: 'ak@indianbank' }],
+    remarks: 'Koyambedu market agent. Best rates for potato and carrot.',
+  },
+  {
+    id: 'V004', salutation: 'Mrs.', firstName: 'Meenakshi', lastName: 'Sundaram',
+    companyName: 'Green Valley Agro', email: 'meena@greenvalley.com',
+    workPhone: '04428003456', mobile: '9643210123', language: 'English',
+    pan: 'DDHGV3456I', gstin: '33DDHGV3456I4Z8', isMsme: true,
+    currency: 'INR- Indian Rupee',
+    billing: { attention: 'Meenakshi Sundaram', country: 'India', street1: '89, Velachery Main Road', street2: '', city: 'Chennai', state: 'Tamil Nadu', pinCode: '600042', phone: '9643210123', fax: '' },
+    shipping: { attention: '', country: 'India', street1: '', street2: '', city: '', state: '', pinCode: '', phone: '', fax: '' },
+    contacts: [],
+    banks: [{ accountName: 'Meenakshi Sundaram', bankName: 'Axis Bank', accountNumber: '9201234567893', confirmAccountNumber: '9201234567893', ifscCode: 'UTIB0003456', accountType: 'Savings', branchName: 'Velachery Branch', upiId: '' }],
+    remarks: 'Carrot, beetroot, and root vegetables specialist.',
+  },
+  {
+    id: 'V005', salutation: 'Mr.', firstName: 'Senthil', lastName: 'Murugan',
+    companyName: 'Tamil Nadu Produce', email: 'senthil@tnproduce.com',
+    workPhone: '04428007890', mobile: '9532101234', language: 'Tamil',
+    pan: 'EEITN7890J', gstin: '33EEITN7890J5Z9', isMsme: false,
+    currency: 'INR- Indian Rupee',
+    billing: { attention: 'Senthil Murugan', country: 'India', street1: '34, Tambaram Sanatorium', street2: '', city: 'Chennai', state: 'Tamil Nadu', pinCode: '600045', phone: '9532101234', fax: '' },
+    shipping: { attention: '', country: 'India', street1: '', street2: '', city: '', state: '', pinCode: '', phone: '', fax: '' },
+    contacts: [],
+    banks: [{ accountName: 'Senthil Murugan', bankName: 'Canara Bank', accountNumber: '1234567890123', confirmAccountNumber: '1234567890123', ifscCode: 'CNRB0007890', accountType: 'Current', branchName: 'Tambaram Branch', upiId: 'senthil@cnrb' }],
+    remarks: 'Cabbage, drumstick, and seasonal vegetables.',
+  },
+  {
+    id: 'V006', salutation: 'Mr.', firstName: 'Murugesan', lastName: 'P',
+    companyName: 'Sri Murugan Traders', email: 'murugesan@srimurugan.com',
+    workPhone: '04428001122', mobile: '9444012345', language: 'Tamil',
+    pan: 'FFJSM1122K', gstin: '33FFJSM1122K6Z0', isMsme: true,
+    currency: 'INR- Indian Rupee',
+    billing: { attention: 'Murugesan P', country: 'India', street1: '67, Sholinganallur OMR', street2: '', city: 'Chennai', state: 'Tamil Nadu', pinCode: '600119', phone: '9444012345', fax: '' },
+    shipping: { attention: '', country: 'India', street1: '', street2: '', city: '', state: '', pinCode: '', phone: '', fax: '' },
+    contacts: [],
+    banks: [{ accountName: 'Murugesan P', bankName: 'Indian Overseas Bank', accountNumber: '4321098765432', confirmAccountNumber: '4321098765432', ifscCode: 'IOBA0001122', accountType: 'Current', branchName: 'Sholinganallur Branch', upiId: '' }],
+    remarks: 'Beetroot, raw banana, and specialty produce. Local Chennai supplier.',
+  },
+];
+
+function loadVendors(): any[] {
+  try {
+    const raw = localStorage.getItem(VENDOR_STORE_KEY);
+    if (!raw) {
+      localStorage.setItem(VENDOR_STORE_KEY, JSON.stringify(DEMO_VENDORS));
+      return [...DEMO_VENDORS];
+    }
+    return JSON.parse(raw);
+  } catch { return [...DEMO_VENDORS]; }
+}
+
+function persistVendors(list: any[]): void {
+  localStorage.setItem(VENDOR_STORE_KEY, JSON.stringify(list));
+}
+
 export default function PurchaseVendorsPage() {
-  const [vendors, setVendors] = useState<any[]>([]);
+  const [vendors, setVendors] = useState<any[]>(() => loadVendors());
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
 
@@ -1274,7 +1789,12 @@ export default function PurchaseVendorsPage() {
   useOutsideClick(kebabRef, () => { setShowKebab(false); setKebabSub(null); });
 
   const handleSave = (v: any) => {
-    setVendors(prev => [...prev, { ...v, id: crypto.randomUUID() }]);
+    const newVendor = { ...v, id: crypto.randomUUID() };
+    setVendors(prev => {
+      const updated = [...prev, newVendor];
+      persistVendors(updated);
+      return updated;
+    });
     setShowForm(false);
   };
 
@@ -1542,7 +2062,12 @@ export default function PurchaseVendorsPage() {
       {vendors.length > 0 && <VendorDashboard vendors={vendors} onNew={() => setShowForm(true)} onImport={() => setShowImport(true)} />}
 
       {/* Import Wizard */}
-      {showImport && <ImportVendorsWizard onClose={() => setShowImport(false)} />}
+      {showImport && (
+        <ImportVendorsWizard
+          onClose={() => setShowImport(false)}
+          onImported={(updated) => { setVendors(updated); setShowImport(false); }}
+        />
+      )}
     </div>
   );
 }

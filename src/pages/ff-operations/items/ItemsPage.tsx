@@ -1,5 +1,8 @@
 // @ts-nocheck
 import { useState, useRef, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import {
   Plus, Search, SlidersHorizontal, MoreHorizontal, X,
   Package, ImagePlus, ChevronDown, ChevronRight, ChevronUp, Info,
@@ -618,14 +621,96 @@ const VIEW_FILTERS: { key: ViewFilter; label: string }[] = [
   { key: 'Services',  label: 'Services' },
 ];
 
+/* ─── Demo grocery seed (selling > cost for profit) ────────────────────── */
+const DEMO_GROCERY_ITEMS = [
+  { name: 'Onion',        category: 'Vegetables', unit: 'kg',  grade_a_price: 35,  grade_b_price: 28,  grade_c_price: 22,  is_active: true },
+  { name: 'Tomato',       category: 'Vegetables', unit: 'kg',  grade_a_price: 50,  grade_b_price: 42,  grade_c_price: 32,  is_active: true },
+  { name: 'Potato',       category: 'Vegetables', unit: 'kg',  grade_a_price: 40,  grade_b_price: 34,  grade_c_price: 26,  is_active: true },
+  { name: 'Carrot',       category: 'Vegetables', unit: 'kg',  grade_a_price: 48,  grade_b_price: 40,  grade_c_price: 30,  is_active: true },
+  { name: 'Green Chilli', category: 'Vegetables', unit: 'kg',  grade_a_price: 70,  grade_b_price: 58,  grade_c_price: 44,  is_active: true },
+  { name: 'Garlic',       category: 'Vegetables', unit: 'kg',  grade_a_price: 140, grade_b_price: 115, grade_c_price: 90,  is_active: true },
+  { name: 'Ginger',       category: 'Vegetables', unit: 'kg',  grade_a_price: 120, grade_b_price: 100, grade_c_price: 75,  is_active: true },
+  { name: 'Banana',       category: 'Fruits',     unit: 'kg',  grade_a_price: 50,  grade_b_price: 40,  grade_c_price: 30,  is_active: true },
+  { name: 'Rice',         category: 'Grains',     unit: 'kg',  grade_a_price: 80,  grade_b_price: 68,  grade_c_price: 52,  is_active: true },
+  { name: 'Toor Dal',     category: 'Pulses',     unit: 'kg',  grade_a_price: 150, grade_b_price: 130, grade_c_price: 105, is_active: true },
+  { name: 'Sunflower Oil',category: 'Oils',       unit: 'ltr', grade_a_price: 165, grade_b_price: 145, grade_c_price: 120, is_active: true },
+  { name: 'Milk',         category: 'Dairy',      unit: 'ltr', grade_a_price: 68,  grade_b_price: 62,  grade_c_price: 52,  is_active: true },
+];
+
+/* maps a products row → Item interface */
+function rowToItem(row: any): Item {
+  return {
+    id: row.id,
+    name: row.name,
+    type: 'Goods',
+    unit: row.unit ?? 'kg',
+    selling_price: row.grade_a_price ?? null,   // our selling price (higher)
+    cost_price: row.grade_c_price ?? null,       // avg purchase price (lower → profit)
+    sales_account: 'Sales',
+    purchase_account: 'Cost of Goods Sold',
+    sales_description: row.category ?? '',
+    purchase_description: row.category ?? '',
+    preferred_vendor: '',
+  };
+}
+
 /* ─── Items List Page ────────────────────────────────────────────────────── */
 export default function ItemsPage() {
-  const [items, setItems] = useState<Item[]>([]);
+  const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [showNew, setShowNew] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [clipText, setClipText] = useState(true);
   const [starredFilters, setStarredFilters] = useState<Set<ViewFilter>>(new Set(['Active']));
+
+  /* ── Fetch from Supabase products table ── */
+  const { data: rawProducts = [], isLoading, refetch } = useQuery({
+    queryKey: ['items-products'],
+    queryFn: async () => {
+      // Try to load; if empty, seed demo data first
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        // Seed demo grocery items
+        const { error: seedErr } = await supabase
+          .from('products')
+          .insert(DEMO_GROCERY_ITEMS);
+        if (seedErr) console.error('Seed error:', seedErr);
+        const { data: seeded } = await supabase
+          .from('products').select('*').order('name');
+        return seeded ?? [];
+      }
+      return data;
+    },
+  });
+
+  const items: Item[] = rawProducts.map(rowToItem);
+
+  /* ── Save new item to Supabase ── */
+  const saveItem = useMutation({
+    mutationFn: async (item: Omit<Item, 'id'>) => {
+      const midPrice = Math.round(((item.selling_price ?? 0) + (item.cost_price ?? 0)) / 2);
+      const { error } = await supabase.from('products').insert({
+        name: item.name,
+        unit: item.unit,
+        category: item.sales_description || item.purchase_description || 'General',
+        grade_a_price: item.selling_price ?? 0,   // selling price
+        grade_b_price: midPrice,                  // mid grade
+        grade_c_price: item.cost_price ?? 0,      // cost / purchase price
+        is_active: true,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Item saved!');
+      qc.invalidateQueries({ queryKey: ['items-products'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   // View filter (All Items dropdown)
   const [viewFilter, setViewFilter] = useState<ViewFilter>('Active');
@@ -731,7 +816,7 @@ export default function ItemsPage() {
   };
 
   const handleSave = (item: Omit<Item, 'id'>) => {
-    setItems(prev => [...prev, { ...item, id: crypto.randomUUID() }]);
+    saveItem.mutate(item);
   };
 
   return (
@@ -924,7 +1009,7 @@ export default function ItemsPage() {
                   </button>
 
                   {/* Refresh */}
-                  <button onClick={() => { setItems(i => [...i]); setShowKebab(false); }}
+                  <button onClick={() => { refetch(); setShowKebab(false); }}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] transition-colors hover:bg-gray-50" style={{ color: '#374151' }}>
                     <RefreshCw className="w-3.5 h-3.5" style={{ color: '#6B7280' }} />
                     Refresh List
@@ -955,6 +1040,11 @@ export default function ItemsPage() {
 
       {/* Table */}
       <div className="flex-1 overflow-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20 text-sm text-gray-400 gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Loading items from database…
+          </div>
+        ) : (
         <table className="w-full">
           <thead>
             <tr style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
@@ -1068,28 +1158,31 @@ export default function ItemsPage() {
                 <td className="px-4 py-3.5" />
               </tr>
             ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={8}>
+                  <div className="flex flex-col items-center justify-center py-28 px-6">
+                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5"
+                      style={{ background: '#EFF6FF' }}>
+                      <Package className="w-8 h-8" style={{ color: '#2563EB' }} />
+                    </div>
+                    <p className="text-[16px] font-semibold mb-2" style={{ color: '#374151' }}>
+                      {search ? 'No items match your search' : 'Goods and Services, if they have a price tag, put them here.'}
+                    </p>
+                    {!search && (
+                      <button
+                        onClick={() => setShowNew(true)}
+                        className="mt-4 flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white"
+                        style={{ background: '#16A34A' }}>
+                        <Plus className="w-4 h-4" /> New Item
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
-
-        {/* Empty state */}
-        {filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-28 px-6">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5"
-              style={{ background: '#EFF6FF' }}>
-              <Package className="w-8 h-8" style={{ color: '#2563EB' }} />
-            </div>
-            <p className="text-[16px] font-semibold mb-2" style={{ color: '#374151' }}>
-              {search ? 'No items match your search' : 'Goods and Services, if they have a price tag, put them here.'}
-            </p>
-            {!search && (
-              <button
-                onClick={() => setShowNew(true)}
-                className="mt-4 flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white"
-                style={{ background: '#16A34A' }}>
-                <Plus className="w-4 h-4" /> New Item
-              </button>
-            )}
-          </div>
         )}
       </div>
 

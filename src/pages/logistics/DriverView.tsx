@@ -45,7 +45,7 @@ export default function DriverView() {
     queryKey: ['driver-trip', user?.id, today],
     queryFn: async () => {
       const { data } = await supabase
-        .from('trips')
+        .from('logistics_trips')
         .select('*')
         .eq('driver_id', user!.id)
         .eq('trip_date', today)

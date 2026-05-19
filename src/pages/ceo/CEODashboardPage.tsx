@@ -20,6 +20,7 @@ import { TodayAttendanceWidget } from '@/components/TodayAttendanceWidget';
 import { DeviationApprovalsWidget } from '@/components/engineering/DeviationApprovalsWidget';
 import { FarmUpdatesWidget } from '@/components/FarmUpdatesWidget';
 import { WorkOrderMonitoringWidget } from '@/components/WorkOrderMonitoringWidget';
+import { RecentSalesOrdersWidget } from '@/components/RecentSalesOrdersWidget';
 
 // Hooks
 import { useCEOIntelligence } from '@/hooks/useCEOIntelligence';
@@ -172,6 +173,9 @@ export function CEODashboardPage() {
                 </ResponsiveContainer>
               </div>
             </div>
+
+            {/* Sales Orders Overview */}
+            <RecentSalesOrdersWidget title="Sales Orders — Live Feed" limit={10} />
 
             {/* Quick Actions */}
             <CEOQuickActions />

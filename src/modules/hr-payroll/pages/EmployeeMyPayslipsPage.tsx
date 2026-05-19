@@ -1,579 +1,820 @@
 // @ts-nocheck
 import { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import igoLogo from '@/assets/igo-logo.png';
+import { Button } from '@/components/ui/button';
 import {
-    FileText, Download, Calendar, IndianRupee, User, Building,
-    Briefcase, Clock, CheckCircle, ChevronRight, ArrowLeft,
-    TrendingUp, TrendingDown, Wallet, BarChart3
-} from "lucide-react";
-import { toast } from "sonner";
+  FileText, Download, ArrowLeft, TrendingUp, TrendingDown,
+  Wallet, BarChart3, User, Building, Briefcase, Clock,
+  CheckCircle, ChevronRight, Printer,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { downloadPayslipPDF } from '../utils/pdfGenerator';
 import { format } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PayslipData {
-    id: string;
-    month: number;
-    year: number;
-    employee_name: string;
-    employee_id: string;
-    department: string;
-    designation?: string;
-    basic_salary: number;
-    increment: number;
-    incentive: number;
-    lop_days: number;
-    lop_amount: number;
-    tds: number;
-    days_in_month: number;
-    selected_days: number;
-    net_pay: number;
-    paid_at?: string;
-    status: string;
+  id: string;
+  month: number;
+  year: number;
+  employee_name: string;
+  employee_id: string;
+  department: string;
+  designation?: string;
+  basic_salary: number;
+  increment: number;
+  incentive: number;
+  lop_days: number;
+  lop_amount: number;
+  tds: number;
+  days_in_month: number;
+  selected_days: number;
+  net_pay: number;
+  paid_at?: string;
+  status: string;
 }
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const MONTHS = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ];
+const COMPANY = {
+  name:       'IGO Precision Farming',
+  fullName:   'IGO Precision Farming Pvt. Ltd.',
+  address:    'No 17, Kovalan Street, 2nd Main Road, Uthandi Kanathur, Chennai 600119',
+  helpline:   '044-00000000',
+  email:      'hr@igogroup.in',
+  disclaimer: 'Keep your salary confidential.',
+};
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(n: number) {
-    return new Intl.NumberFormat('en-IN', {
-        style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 0
-    }).format(n);
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 0,
+  }).format(n);
 }
 function fmtFull(n: number) {
-    return new Intl.NumberFormat('en-IN', {
-        style: 'currency', currency: 'INR', minimumFractionDigits: 2
-    }).format(n);
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency', currency: 'INR', minimumFractionDigits: 2,
+  }).format(n);
 }
 function getDaysInMonth(year: number, month: number) {
-    return new Date(year, month, 0).getDate();
+  return new Date(year, month, 0).getDate();
 }
 function getInitials(name?: string) {
-    if (!name) return 'U';
-    return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
+  if (!name) return 'U';
+  return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
 }
 
-// ─── Salary Breakdown Bar ────────────────────────────────────────────────────
-const SEGMENTS = [
-    { key: 'basic_salary', label: 'Basic Salary', color: '#2563EB' },
-    { key: 'incentive',    label: 'Incentive',    color: '#16A34A' },
-    { key: 'increment',    label: 'Increment',    color: '#D97706' },
-    { key: '_deductions',  label: 'Deductions',   color: '#DC2626' },
-];
+// ─── Number to Words (Indian system) ─────────────────────────────────────────
+function numberToWords(num: number): string {
+  if (num === 0) return 'Zero';
+  const ones = [
+    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+    'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+    'Seventeen', 'Eighteen', 'Nineteen',
+  ];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 
-function SalaryBreakdownBar({ payslip }: { payslip: PayslipData }) {
-    const deductions = payslip.lop_amount + payslip.tds;
-    const values: Record<string, number> = {
-        basic_salary: payslip.basic_salary,
-        incentive: payslip.incentive,
-        increment: payslip.increment,
-        _deductions: deductions,
-    };
-    const gross = payslip.basic_salary + payslip.incentive + payslip.increment;
-    const total = gross + deductions;
+  function convert(n: number): string {
+    if (n < 20)      return ones[n];
+    if (n < 100)     return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '');
+    if (n < 1000)    return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + convert(n % 100) : '');
+    if (n < 100000)  return convert(Math.floor(n / 1000)) + ' Thousand' + (n % 1000 ? ' ' + convert(n % 1000) : '');
+    if (n < 10000000) return convert(Math.floor(n / 100000)) + ' Lakh' + (n % 100000 ? ' ' + convert(n % 100000) : '');
+    return convert(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 ? ' ' + convert(n % 10000000) : '');
+  }
 
-    return (
+  const intPart  = Math.floor(num);
+  const decPart  = Math.round((num - intPart) * 100);
+  let result     = convert(intPart);
+  if (decPart > 0) result += ' and ' + convert(decPart) + ' Paise';
+  return result;
+}
+
+// ─── Salary calculation helpers ───────────────────────────────────────────────
+function buildEarnings(p: PayslipData) {
+  const paidDays    = Math.max(p.selected_days - p.lop_days, 0);
+  const factor      = p.days_in_month > 0 ? paidDays / p.days_in_month : 1;
+
+  const basicSalary = p.basic_salary;                     // monthly basic
+  const hra         = Math.round(basicSalary * 0.40);     // 40% HRA
+  const suppAllw    = p.increment;                         // supplementary / increment
+  const bonus       = 0;
+  const oti         = p.incentive;                         // one-time incentive
+
+  return [
+    { label: 'Basic',                   salary: basicSalary, actual: Math.round(basicSalary * factor) },
+    { label: 'HRA',                     salary: hra,          actual: Math.round(hra * factor) },
+    { label: 'Supplementary Allowance', salary: suppAllw,     actual: Math.round(suppAllw * factor) },
+    { label: 'Bonus',                   salary: bonus,         actual: Math.round(bonus * factor) },
+    { label: 'One Time Incentive',      salary: oti,           actual: oti },  // OTI not prorated
+  ];
+}
+function buildDeductions(p: PayslipData) {
+  // Split tds into PF + ESI + PT (rough standard split)
+  const pf  = Math.round(p.basic_salary * 0.12);          // 12% PF
+  const esi  = p.basic_salary <= 21000 ? Math.round(p.basic_salary * 0.0075) : 0; // 0.75% ESI if eligible
+  const pt   = 200;                                         // ₹200 professional tax
+  const lop  = Math.round(p.lop_amount);
+
+  return [
+    { label: 'Employee PF',      amount: pf },
+    { label: 'Employee ESI',     amount: esi },
+    { label: 'Professional Tax', amount: pt },
+    ...(lop > 0 ? [{ label: `LOP (${p.lop_days} days)`, amount: lop }] : []),
+  ];
+}
+
+// ─── Payslip Print HTML Generator ────────────────────────────────────────────
+function generatePayslipHTML(p: PayslipData, logoUrl?: string): string {
+  const earnings   = buildEarnings(p);
+  const deductions = buildDeductions(p);
+  const paidDays   = Math.max(p.selected_days - p.lop_days, 0);
+
+  const totalEarningActual = earnings.reduce((s, e) => s + e.actual, 0);
+  const totalEarningSalary = earnings.reduce((s, e) => s + e.salary, 0);
+  const totalDeduction     = deductions.reduce((s, d) => s + d.amount, 0);
+  const netPay             = p.net_pay; // use DB computed net pay
+
+  const monthYear = `${MONTHS[p.month - 1]} ${p.year}`;
+  const netInWords = numberToWords(netPay);
+
+  const infoRows: [string, string, string, string][] = [
+    ['Employee Code',      p.employee_id || '—',    'Employee Name',       p.employee_name || '—'],
+    ['Zone',               '—',                      'Grade',               '—'],
+    ['Branch',             p.department || '—',      'Location',            'Chennai'],
+    ['Date of Joining',    '—',                      'Department',          p.department || '—'],
+    ['Designation',        p.designation || '—',     'Total Days In Month', String(p.days_in_month)],
+    ['Days Paid',          String(paidDays),          'Bank Name',           '—'],
+    ['LOP Reversal',       String(p.lop_days),        'Bank Account No.',    '—'],
+    ['PF Account No.',     '—',                      'IFSC Code',           '—'],
+    ['UAN No.',            '—',                      'PAN No.',             '—'],
+    ['ESIC No.',           '—',                      '',                    ''],
+  ];
+
+  const maxRows = Math.max(earnings.length, deductions.length) + 1; // +1 for header
+  let tableRows = '';
+  for (let i = 0; i < earnings.length || i < deductions.length; i++) {
+    const e = earnings[i];
+    const d = deductions[i];
+    tableRows += `<tr>
+      <td class="tl">${e ? e.label : ''}</td>
+      <td class="tr">${e ? '₹' + e.actual.toLocaleString('en-IN') : ''}</td>
+      <td class="tr">${e ? '₹' + e.salary.toLocaleString('en-IN') : ''}</td>
+      <td class="sep"></td>
+      <td class="tl">${d ? d.label : ''}</td>
+      <td class="tr">${d ? '₹' + d.amount.toLocaleString('en-IN') : ''}</td>
+    </tr>`;
+  }
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title> </title>
+<style>
+  @page { margin: 0; size: A4 portrait; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #000; background: #fff; padding: 10mm; }
+
+  .wrapper   { max-width: 800px; margin: 0 auto; border: 2px solid #000; }
+
+  /* ── Company Header ── */
+  .header    { display: flex; align-items: center; padding: 10px 14px; border-bottom: 2px solid #000; }
+  .logo-box  { width: 72px; height: 72px; border: 1px solid #ccc; border-radius: 6px;
+               display: flex; align-items: center; justify-content: center; margin-right: 14px;
+               background: #fff; flex-shrink:0; overflow: hidden; }
+  .logo-img  { width: 68px; height: 68px; object-fit: contain; }
+  .co-name   { font-size: 15px; font-weight: 700; color: #1a6b3c; margin-bottom: 3px; }
+  .co-addr   { font-size: 9.5px; color: #444; line-height: 1.5; }
+  .disclaimer{ background: #fff8e1; border-bottom: 1px solid #f0c040; padding: 5px 14px;
+               font-size: 9.5px; font-weight: 700; color: #7a5c00; letter-spacing:.03em; }
+  .slip-title{ background: #1a6b3c; color: #fff; text-align: center; padding: 6px;
+               font-size: 12px; font-weight: 700; letter-spacing:.05em; }
+
+  /* ── Info grid ── */
+  .info-table { width: 100%; border-collapse: collapse; }
+  .info-table td { padding: 4px 8px; border: 1px solid #ccc; font-size: 10px; }
+  .info-label   { font-weight: 700; background: #f5f5f5; width: 18%; white-space: nowrap; }
+  .info-value   { width: 32%; }
+
+  /* ── Earnings / Deductions ── */
+  .sal-table { width: 100%; border-collapse: collapse; margin-top: 0; }
+  .sal-table th, .sal-table td { border: 1px solid #ccc; padding: 4px 7px; font-size: 10px; }
+  .sal-table th { background: #d4edda; font-weight: 700; text-align: center; font-size: 10.5px; }
+  .tl { text-align: left; }
+  .tr { text-align: right; }
+  .sep { width: 4px; background: #333; padding: 0; border-color: #333; }
+  .total-row td { font-weight: 700; background: #e8f5e9; }
+  .net-row td   { font-weight: 700; background: #1a6b3c; color: #fff; font-size: 11.5px; }
+
+  /* ── Net Pay summary ── */
+  .net-summary { padding: 8px 14px; border-top: 2px solid #000; }
+  .net-line     { font-size: 11px; margin-bottom: 4px; }
+  .net-line strong { color: #1a6b3c; }
+  .footer-note  { padding: 6px 14px; background: #f5f5f5; border-top: 1px solid #ccc;
+                  font-size: 9px; color: #555; }
+  .quote        { padding: 6px 14px; font-style: italic; font-size: 9px; color: #666;
+                  text-align: center; border-top: 1px dashed #ccc; }
+  @media print { button { display: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- Company Header -->
+  <div class="header">
+    <div class="logo-box">${logoUrl ? `<img class="logo-img" src="${logoUrl}" alt="IGO Logo" />` : `<span style="font-size:22px">🌾</span>`}</div>
+    <div>
+      <div class="co-name">${COMPANY.fullName}</div>
+      <div class="co-addr">
+        ${COMPANY.address}<br>
+        Helpline: ${COMPANY.helpline} &nbsp;|&nbsp; Email: ${COMPANY.email}
+      </div>
+    </div>
+  </div>
+
+  <div class="disclaimer">⚠ ${COMPANY.disclaimer}</div>
+  <div class="slip-title">PAY SLIP FOR THE MONTH OF ${monthYear.toUpperCase()}</div>
+
+  <!-- Employee Info -->
+  <table class="info-table">
+    ${infoRows.map(([l1, v1, l2, v2]) => `
+      <tr>
+        <td class="info-label">${l1}</td>
+        <td class="info-value">${v1}</td>
+        <td class="info-label">${l2}</td>
+        <td class="info-value">${v2}</td>
+      </tr>`).join('')}
+  </table>
+
+  <!-- Earnings & Deductions -->
+  <table class="sal-table">
+    <thead>
+      <tr>
+        <th colspan="3" style="border-right:2px solid #333">EARNINGS</th>
+        <th class="sep"></th>
+        <th colspan="2">DEDUCTIONS</th>
+      </tr>
+      <tr>
+        <th class="tl" style="width:28%">Description</th>
+        <th class="tr" style="width:11%">Actual</th>
+        <th class="tr" style="width:11%;border-right:2px solid #333">Salary</th>
+        <th class="sep"></th>
+        <th class="tl" style="width:30%">Description</th>
+        <th class="tr" style="width:15%">Deducted</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${tableRows}
+      <!-- Totals row -->
+      <tr class="total-row">
+        <td class="tl"><strong>Total Earning</strong></td>
+        <td class="tr">₹${totalEarningActual.toLocaleString('en-IN')}</td>
+        <td class="tr" style="border-right:2px solid #333">₹${totalEarningSalary.toLocaleString('en-IN')}</td>
+        <td class="sep"></td>
+        <td class="tl"><strong>Total Deduction</strong></td>
+        <td class="tr">₹${totalDeduction.toLocaleString('en-IN')}</td>
+      </tr>
+      <!-- Net Pay spanning row -->
+      <tr class="net-row">
+        <td colspan="2"><strong>NET PAY</strong></td>
+        <td class="tr" style="border-right:2px solid #333"><strong>₹${netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></td>
+        <td class="sep"></td>
+        <td colspan="2" class="tr"><strong>₹${netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Net Pay Summary -->
+  <div class="net-summary">
+    <div class="net-line"><strong>Net Pay :</strong> <strong>₹${netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong> Only</div>
+    <div class="net-line"><strong>In words :</strong> <em>${netInWords} Rupees Only</em></div>
+  </div>
+
+  <div class="footer-note">
+    This is a system generated report and does not require signature or stamp.
+  </div>
+  <div class="quote">
+    <em>"Work hard in silence, let your success be your noise."</em>
+  </div>
+
+</div>
+</body>
+</html>`;
+}
+
+// ─── Print / Download ─────────────────────────────────────────────────────────
+async function printPayslip(p: PayslipData) {
+  // Convert logo to data URL so it embeds correctly in the popup window
+  let logoDataUrl: string | undefined;
+  try {
+    const resp = await fetch(igoLogo);
+    const blob = await resp.blob();
+    logoDataUrl = await new Promise<string>((res) => {
+      const reader = new FileReader();
+      reader.onload = () => res(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+  } catch { /* use fallback emoji if logo fetch fails */ }
+
+  const html = generatePayslipHTML(p, logoDataUrl);
+  const win  = window.open('', '_blank', 'width=900,height=720,scrollbars=yes');
+  if (!win) { toast.error('Allow pop-ups to download payslip'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => { win.focus(); win.print(); };
+}
+
+// ─── Monthly Card ─────────────────────────────────────────────────────────────
+function PayslipCard({ p, onClick }: { p: PayslipData; onClick: () => void }) {
+  const deductions = p.lop_amount + p.tds;
+  const gross      = p.basic_salary + p.incentive + p.increment;
+
+  return (
+    <div
+      onClick={onClick}
+      className="bg-white rounded-2xl p-4 cursor-pointer border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-200 hover:scale-[1.01]"
+      style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+    >
+      {/* Month header */}
+      <div className="flex items-start justify-between mb-3">
         <div>
-            {/* Top summary row */}
-            <div className="flex flex-wrap gap-6 mb-4">
-                <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#9CA3AF' }}>Total Pay</p>
-                    <p className="text-2xl font-black" style={{ color: '#111827' }}>{fmtFull(payslip.net_pay)}</p>
-                </div>
-                {SEGMENTS.map(seg => {
-                    const v = values[seg.key] || 0;
-                    if (v === 0) return null;
-                    return (
-                        <div key={seg.key} className="flex items-start gap-1.5">
-                            <div className="w-2.5 h-2.5 rounded-full mt-0.5 shrink-0" style={{ background: seg.color }} />
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#9CA3AF' }}>{seg.label}</p>
-                                <p className="text-sm font-bold" style={{ color: '#111827' }}>{fmt(v)}</p>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Proportional color bar */}
-            <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
-                {SEGMENTS.map(seg => {
-                    const v = values[seg.key] || 0;
-                    const pct = total > 0 ? (v / total) * 100 : 0;
-                    if (pct === 0) return null;
-                    return (
-                        <div key={seg.key} style={{ width: `${pct}%`, background: seg.color }} />
-                    );
-                })}
-            </div>
+          <p className="text-base font-black text-gray-900">
+            {MONTHS[p.month - 1]} {p.year}
+          </p>
+          <p className="text-[10px] mt-0.5 text-gray-400">
+            {p.days_in_month} days · {Math.max(p.selected_days - p.lop_days, 0)} paid
+            {p.lop_days > 0 && ` · ${p.lop_days} LOP`}
+          </p>
         </div>
-    );
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 shrink-0">
+          ✓ Paid
+        </span>
+      </div>
+
+      {/* Mini bar */}
+      <div className="flex h-1.5 rounded-full overflow-hidden mb-3 gap-0.5">
+        {[
+          { v: p.basic_salary, c: '#2563EB' },
+          { v: p.incentive,    c: '#16A34A' },
+          { v: p.increment,    c: '#D97706' },
+          { v: deductions,     c: '#DC2626' },
+        ].map((seg, i) => seg.v > 0 && (
+          <div key={i} style={{ flex: seg.v, background: seg.c }} />
+        ))}
+      </div>
+
+      {/* Key numbers */}
+      <div className="space-y-1.5 mb-3">
+        <div className="flex justify-between text-xs">
+          <span className="text-gray-500">Basic Salary</span>
+          <span className="font-semibold text-gray-900">{fmt(p.basic_salary)}</span>
+        </div>
+        {p.incentive > 0 && (
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">Incentive</span>
+            <span className="font-semibold text-green-600">+{fmt(p.incentive)}</span>
+          </div>
+        )}
+        {p.increment > 0 && (
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">Supplement</span>
+            <span className="font-semibold text-amber-600">+{fmt(p.increment)}</span>
+          </div>
+        )}
+        {deductions > 0 && (
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">Deductions</span>
+            <span className="font-semibold text-red-500">-{fmt(deductions)}</span>
+          </div>
+        )}
+        <div className="flex justify-between pt-1.5 border-t border-gray-100">
+          <span className="text-xs font-bold text-gray-700">Net Pay</span>
+          <span className="text-sm font-black text-blue-600">{fmt(p.net_pay)}</span>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+        <button
+          onClick={e => { e.stopPropagation(); printPayslip(p); toast.success('Opening payslip…'); }}
+          className="flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-blue-600 transition-colors"
+        >
+          <Download className="w-3 h-3" /> Download
+        </button>
+        <span className="flex items-center gap-0.5 text-[10px] font-bold text-blue-600">
+          View Payslip <ChevronRight className="w-3 h-3" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Payslip Detail View (Calibehr format in ERP) ─────────────────────────────
+function PayslipDetailView({ p, onBack }: { p: PayslipData; onBack: () => void }) {
+  const earnings      = buildEarnings(p);
+  const deductions    = buildDeductions(p);
+  const paidDays      = Math.max(p.selected_days - p.lop_days, 0);
+  const totalEarning  = earnings.reduce((s, e) => s + e.actual, 0);
+  const totalDeduct   = deductions.reduce((s, d) => s + d.amount, 0);
+  const netPay        = p.net_pay;
+  const netInWords    = numberToWords(netPay);
+  const monthYear     = `${MONTHS[p.month - 1]} ${p.year}`;
+
+  const infoLeft: [string, string][] = [
+    ['Employee Code',   p.employee_id || '—'],
+    ['Zone',            '—'],
+    ['Branch',          p.department || '—'],
+    ['Date of Joining', '—'],
+    ['Designation',     p.designation || '—'],
+    ['Days Paid',       String(paidDays)],
+    ['LOP Reversal',    String(p.lop_days)],
+    ['PF Account No.',  '—'],
+    ['UAN No.',         '—'],
+    ['ESIC No.',        '—'],
+  ];
+  const infoRight: [string, string][] = [
+    ['Employee Name',       p.employee_name || '—'],
+    ['Grade',               '—'],
+    ['Location',            'Chennai'],
+    ['Department',          p.department || '—'],
+    ['Total Days In Month', String(p.days_in_month)],
+    ['Bank Name',           '—'],
+    ['Bank Account No.',    '—'],
+    ['IFSC Code',           '—'],
+    ['PAN No.',             '—'],
+    ['',                    ''],
+  ];
+
+  const maxRows = Math.max(earnings.length, deductions.length);
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-6">
+
+      {/* Actions bar */}
+      <div className="flex items-center justify-between mb-5">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to Payslips
+        </button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => { printPayslip(p); toast.success('Opening print preview…'); }}
+            className="gap-2 h-9 text-sm border-gray-300"
+          >
+            <Printer className="w-4 h-4" /> Print
+          </Button>
+          <Button
+            onClick={() => { printPayslip(p); toast.success('Opening download…'); }}
+            className="gap-2 h-9 text-sm bg-green-700 hover:bg-green-800 text-white"
+          >
+            <Download className="w-4 h-4" /> Download PDF
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Payslip Card (matches print layout) ── */}
+      <div className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+
+        {/* Company Header */}
+        <div className="flex items-center gap-4 px-6 py-4 border-b-2 border-gray-800">
+          <div className="w-16 h-16 rounded-xl bg-white flex items-center justify-center shrink-0 border border-gray-200 overflow-hidden p-1">
+            <img src={igoLogo} alt="IGO Logo" className="w-full h-full object-contain" />
+          </div>
+          <div className="flex-1">
+            <p className="text-base font-black text-green-800">{COMPANY.fullName}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{COMPANY.address}</p>
+            <p className="text-xs text-gray-500">
+              Helpline: {COMPANY.helpline} &nbsp;|&nbsp; Email: {COMPANY.email}
+            </p>
+          </div>
+          {p.paid_at && (
+            <div className="text-right shrink-0">
+              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">
+                ✓ Paid {format(new Date(p.paid_at), 'dd MMM yyyy')}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Disclaimer */}
+        <div className="px-6 py-2 bg-yellow-50 border-b border-yellow-200">
+          <p className="text-[10px] font-bold text-yellow-800">⚠ {COMPANY.disclaimer}</p>
+        </div>
+
+        {/* Pay Slip Title */}
+        <div className="bg-green-800 text-white text-center py-2.5">
+          <p className="text-xs font-black tracking-widest uppercase">
+            Pay Slip for the Month of {monthYear}
+          </p>
+        </div>
+
+        {/* Employee Info Grid */}
+        <div className="border-b border-gray-300">
+          <table className="w-full border-collapse text-xs">
+            <tbody>
+              {infoLeft.map(([label, value], i) => (
+                <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                  <td className="px-3 py-1.5 font-bold text-gray-700 border border-gray-200 w-[22%] whitespace-nowrap">{infoLeft[i][0]}</td>
+                  <td className="px-3 py-1.5 text-gray-800 border border-gray-200 w-[28%]">{infoLeft[i][1]}</td>
+                  <td className="px-3 py-1.5 font-bold text-gray-700 border border-gray-200 w-[22%] whitespace-nowrap">{infoRight[i][0]}</td>
+                  <td className="px-3 py-1.5 text-gray-800 border border-gray-200 w-[28%]">{infoRight[i][1]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Earnings & Deductions Table */}
+        <div>
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr>
+                <th colSpan={3} className="px-3 py-2 bg-green-100 text-green-900 font-black text-center border border-gray-300 border-r-2 border-r-gray-600">
+                  EARNINGS
+                </th>
+                <th colSpan={2} className="px-3 py-2 bg-red-50 text-red-900 font-black text-center border border-gray-300">
+                  DEDUCTIONS
+                </th>
+              </tr>
+              <tr className="bg-gray-100">
+                <th className="px-3 py-2 text-left font-bold text-gray-700 border border-gray-300 w-[30%]">Description</th>
+                <th className="px-3 py-2 text-right font-bold text-gray-700 border border-gray-300 w-[12%]">Actual</th>
+                <th className="px-3 py-2 text-right font-bold text-gray-700 border border-gray-300 border-r-2 border-r-gray-600 w-[12%]">Salary</th>
+                <th className="px-3 py-2 text-left font-bold text-gray-700 border border-gray-300 w-[30%]">Description</th>
+                <th className="px-3 py-2 text-right font-bold text-gray-700 border border-gray-300 w-[16%]">Deducted</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: maxRows }).map((_, i) => {
+                const e = earnings[i];
+                const d = deductions[i];
+                return (
+                  <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                    <td className="px-3 py-2 text-gray-800 border border-gray-200">{e ? e.label : ''}</td>
+                    <td className="px-3 py-2 text-right text-gray-800 border border-gray-200 font-mono">
+                      {e ? `₹${e.actual.toLocaleString('en-IN')}` : ''}
+                    </td>
+                    <td className="px-3 py-2 text-right text-gray-600 border border-gray-200 border-r-2 border-r-gray-600 font-mono">
+                      {e ? `₹${e.salary.toLocaleString('en-IN')}` : ''}
+                    </td>
+                    <td className="px-3 py-2 text-gray-800 border border-gray-200">{d ? d.label : ''}</td>
+                    <td className="px-3 py-2 text-right text-red-600 border border-gray-200 font-mono font-semibold">
+                      {d ? `₹${d.amount.toLocaleString('en-IN')}` : ''}
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {/* Total row */}
+              <tr className="bg-green-50 font-bold">
+                <td className="px-3 py-2 text-green-900 border border-gray-300 font-black">Total Earning</td>
+                <td className="px-3 py-2 text-right text-green-800 border border-gray-300 font-mono font-black">
+                  ₹{totalEarning.toLocaleString('en-IN')}
+                </td>
+                <td className="px-3 py-2 text-right text-green-700 border border-gray-300 border-r-2 border-r-gray-600 font-mono font-black">
+                  ₹{earnings.reduce((s, e) => s + e.salary, 0).toLocaleString('en-IN')}
+                </td>
+                <td className="px-3 py-2 text-red-900 border border-gray-300 font-black">Total Deduction</td>
+                <td className="px-3 py-2 text-right text-red-700 border border-gray-300 font-mono font-black">
+                  ₹{totalDeduct.toLocaleString('en-IN')}
+                </td>
+              </tr>
+
+              {/* Net Pay row */}
+              <tr className="bg-green-800 text-white font-black">
+                <td className="px-3 py-3 border border-green-700 text-base">NET PAY</td>
+                <td colSpan={2} className="px-3 py-3 text-right border border-green-700 border-r-2 border-r-green-600 text-base font-mono">
+                  ₹{netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </td>
+                <td className="px-3 py-3 border border-green-700" />
+                <td className="px-3 py-3 text-right border border-green-700 text-base font-mono">
+                  ₹{netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Net Pay Summary */}
+        <div className="px-6 py-4 border-t-2 border-gray-800 space-y-1.5">
+          <p className="text-sm">
+            <span className="font-black text-gray-800">Net Pay : </span>
+            <span className="font-bold text-green-800">
+              ₹{netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+            <span className="text-gray-600"> Only</span>
+          </p>
+          <p className="text-sm">
+            <span className="font-black text-gray-800">In words : </span>
+            <span className="italic text-gray-700">{netInWords} Rupees Only</span>
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-2.5 bg-gray-50 border-t border-gray-200">
+          <p className="text-[10px] text-gray-500">
+            This is a system generated report and does not require signature or stamp.
+          </p>
+        </div>
+        <div className="px-6 py-2 text-center border-t border-dashed border-gray-300 bg-white">
+          <p className="text-[10px] text-gray-400 italic">
+            "Work hard in silence, let your success be your noise."
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Employee Profile Header ──────────────────────────────────────────────────
-function EmployeeProfileHeader({ user, lastLogin }: { user: any; lastLogin?: string }) {
-    const name = user?.name || 'Employee';
-    const initials = getInitials(name);
-    const colors = ['#EFF6FF', '#2563EB'];
+function EmployeeProfileHeader({ user }: { user: any }) {
+  const name     = user?.name || 'Employee';
+  const initials = getInitials(name);
 
-    return (
-        <div className="rounded-2xl p-5 flex items-center gap-5 mb-6"
-            style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-            {/* Avatar */}
-            <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-black shrink-0"
-                style={{ background: 'linear-gradient(135deg, #EFF6FF, #BFDBFE)', color: '#2563EB', border: '2px solid #BFDBFE' }}>
-                {initials}
-            </div>
-
-            {/* Name & meta */}
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                    <h2 className="text-lg font-black" style={{ color: '#111827' }}>{name}</h2>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                        style={{ background: '#DCFCE7', color: '#16A34A' }}>● Active</span>
-                </div>
-                <div className="flex flex-wrap gap-4 text-xs" style={{ color: '#6B7280' }}>
-                    {user?.employeeId && (
-                        <span className="flex items-center gap-1">
-                            <User className="w-3 h-3" /> #{user.employeeId}
-                        </span>
-                    )}
-                    {user?.department && (
-                        <span className="flex items-center gap-1">
-                            <Building className="w-3 h-3" /> {user.department}
-                        </span>
-                    )}
-                    {user?.role && (
-                        <span className="flex items-center gap-1">
-                            <Briefcase className="w-3 h-3" /> {user.role}
-                        </span>
-                    )}
-                    {lastLogin && (
-                        <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" /> Last Login: {lastLogin}
-                        </span>
-                    )}
-                </div>
-            </div>
-
-            {/* ID badge */}
-            <div className="text-right shrink-0 hidden md:block">
-                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#9CA3AF' }}>Employee ID</p>
-                <p className="text-sm font-black" style={{ color: '#111827' }}>#{user?.employeeId || '—'}</p>
-            </div>
+  return (
+    <div className="rounded-2xl p-5 flex items-center gap-5 mb-6 bg-white border border-gray-200"
+      style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+      <div className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-black shrink-0"
+        style={{ background: 'linear-gradient(135deg,#EFF6FF,#BFDBFE)', color: '#2563EB', border: '2px solid #BFDBFE' }}>
+        {initials}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="text-lg font-black text-gray-900">{name}</h2>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">● Active</span>
         </div>
-    );
+        <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+          {user?.employeeId && <span className="flex items-center gap-1"><User className="w-3 h-3" /> #{user.employeeId}</span>}
+          {user?.department  && <span className="flex items-center gap-1"><Building className="w-3 h-3" /> {user.department}</span>}
+          {user?.role        && <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" /> {user.role}</span>}
+        </div>
+      </div>
+      <div className="text-right shrink-0 hidden md:block">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Employee ID</p>
+        <p className="text-sm font-black text-gray-900">#{user?.employeeId || '—'}</p>
+      </div>
+    </div>
+  );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function EmployeeMyPayslipsPage() {
-    const { user } = useAuth();
-    const [payslips, setPayslips] = useState<PayslipData[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedPayslip, setSelectedPayslip] = useState<PayslipData | null>(null);
-    const [lastLogin, setLastLogin] = useState<string | undefined>();
+  const { user }                                    = useAuth();
+  const [payslips, setPayslips]                     = useState<PayslipData[]>([]);
+  const [loading, setLoading]                       = useState(true);
+  const [selectedPayslip, setSelectedPayslip]       = useState<PayslipData | null>(null);
 
-    useEffect(() => { fetchMyPayslips(); }, [user]);
-    useEffect(() => { fetchLastLogin(); }, [user]);
+  useEffect(() => { fetchMyPayslips(); }, [user]);
 
-    async function fetchLastLogin() {
-        if (!user?.id) return;
-        try {
-            const { data } = await supabase
-                .from('day_start')
-                .select('submitted_at')
-                .eq('employee_id', user.id)
-                .order('submitted_at', { ascending: false })
-                .limit(2);
-            if (data && data.length > 1) {
-                setLastLogin(format(new Date(data[1].submitted_at), 'dd MMM yyyy, hh:mm a'));
-            }
-        } catch { /* ignore */ }
-    }
+  async function fetchMyPayslips() {
+    if (!user) return;
+    try {
+      setLoading(true);
 
-    async function fetchMyPayslips() {
-        if (!user) return;
-        try {
-            setLoading(true);
-            const { data: batchEmployees, error } = await supabase
-                .from('salary_batch_employees')
-                .select(`
+      const { data: batchEmployees, error } = await supabase
+        .from('salary_batch_employees')
+        .select(`
           id, batch_id, employee_name, department,
           basic_salary, increment, incentive,
           lop_days, lop_amount, tds,
           days_in_month, selected_days, net_pay, status,
           salary_batches!inner(month, year, from_day, to_day, status, paid_at)
         `)
-                .or(`profile_id.eq.${user.id},employee_id.eq.${user.id}`)
-                .order('created_at', { ascending: false });
+        .or(`profile_id.eq.${user.id},employee_id.eq.${user.id}`)
+        .order('created_at', { ascending: false });
 
-            if (error) { toast.error('Failed to load payslips'); return; }
+      if (error) { toast.error('Failed to load payslips'); return; }
 
-            const formatted: PayslipData[] = (batchEmployees || []).map((be: any) => {
-                const batch = be.salary_batches;
-                return {
-                    id: be.id,
-                    month: batch.month,
-                    year: batch.year,
-                    employee_name: be.employee_name || user.name || '',
-                    employee_id: user.employeeId || '',
-                    department: be.department || user.department || '',
-                    designation: user.role || '',
-                    basic_salary: be.basic_salary || 0,
-                    increment: be.increment || 0,
-                    incentive: be.incentive || 0,
-                    lop_days: be.lop_days || 0,
-                    lop_amount: be.lop_amount || 0,
-                    tds: be.tds || 0,
-                    days_in_month: getDaysInMonth(batch.year, batch.month),
-                    selected_days: be.selected_days || getDaysInMonth(batch.year, batch.month),
-                    net_pay: be.net_pay || 0,
-                    paid_at: batch.paid_at,
-                    status: be.status || batch.status || 'Draft',
-                };
-            }).filter((p: PayslipData) => ['Paid', 'PAID', 'Paid Already'].includes(p.status));
+      const formatted: PayslipData[] = (batchEmployees || []).map((be: any) => {
+        const batch = be.salary_batches;
+        return {
+          id:           be.id,
+          month:        batch.month,
+          year:         batch.year,
+          employee_name: be.employee_name || user.name || '',
+          employee_id:  user.employeeId || '',
+          department:   be.department || user.department || '',
+          designation:  user.role || '',
+          basic_salary: be.basic_salary || 0,
+          increment:    be.increment    || 0,
+          incentive:    be.incentive    || 0,
+          lop_days:     be.lop_days     || 0,
+          lop_amount:   be.lop_amount   || 0,
+          tds:          be.tds          || 0,
+          days_in_month: getDaysInMonth(batch.year, batch.month),
+          selected_days: be.selected_days || getDaysInMonth(batch.year, batch.month),
+          net_pay:      be.net_pay      || 0,
+          paid_at:      batch.paid_at,
+          status:       be.status || batch.status || 'Draft',
+        };
+      }).filter((p: PayslipData) => ['Paid', 'PAID', 'Paid Already'].includes(p.status));
 
-            setPayslips(formatted);
-        } catch { toast.error('Failed to load payslips'); }
-        finally { setLoading(false); }
-    }
+      setPayslips(formatted);
+    } catch { toast.error('Failed to load payslips'); }
+    finally   { setLoading(false); }
+  }
 
-    function downloadPayslip(payslip: PayslipData, e?: React.MouseEvent) {
-        e?.stopPropagation();
-        try { downloadPayslipPDF(payslip); toast.success('Payslip downloaded'); }
-        catch { toast.error('Failed to generate PDF'); }
-    }
+  // ── Payslip detail view ──
+  if (selectedPayslip) {
+    return <PayslipDetailView p={selectedPayslip} onBack={() => setSelectedPayslip(null)} />;
+  }
 
-    // ── Payslip Detail View ────────────────────────────────────────────────
-    if (selectedPayslip) {
-        const p = selectedPayslip;
-        const deductions = p.lop_amount + p.tds;
-        const gross = p.basic_salary + p.incentive + p.increment;
-        const paidDays = p.selected_days - p.lop_days;
-
-        const payElements = [
-            { label: 'Basic Salary',  category: 'Salary',    color: '#2563EB', catBg: '#EFF6FF', catText: '#2563EB', amount: p.basic_salary, type: 'earning' },
-            { label: 'Incentive',     category: 'Incentive', color: '#16A34A', catBg: '#F0FDF4', catText: '#16A34A', amount: p.incentive,    type: 'earning' },
-            { label: 'Increment',     category: 'Increment', color: '#D97706', catBg: '#FFFBEB', catText: '#D97706', amount: p.increment,    type: 'earning' },
-            { label: 'TDS',           category: 'Tax',       color: '#DC2626', catBg: '#FEF2F2', catText: '#DC2626', amount: p.tds,          type: 'deduction' },
-            { label: 'Loss of Pay',   category: 'LOP',       color: '#DC2626', catBg: '#FEF2F2', catText: '#DC2626', amount: p.lop_amount,   type: 'deduction', note: p.lop_days > 0 ? `${p.lop_days} days` : '' },
-        ].filter(el => el.amount > 0);
-
-        return (
-            <div className="max-w-4xl mx-auto px-4 py-6">
-                {/* Back + Actions */}
-                <div className="flex items-center justify-between mb-5">
-                    <button onClick={() => setSelectedPayslip(null)}
-                        className="flex items-center gap-1.5 text-sm font-semibold hover:text-primary transition-colors"
-                        style={{ color: '#6B7280' }}>
-                        <ArrowLeft className="w-4 h-4" /> Back to Payslips
-                    </button>
-                    <Button onClick={() => downloadPayslip(p)} className="gap-2">
-                        <Download className="w-4 h-4" /> Download PDF
-                    </Button>
-                </div>
-
-                {/* Employee profile header */}
-                <EmployeeProfileHeader user={user} lastLogin={lastLogin} />
-
-                {/* Payroll summary card */}
-                <div className="rounded-2xl p-6 mb-5"
-                    style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-
-                    {/* Period + tab bar */}
-                    <div className="flex items-center justify-between mb-5">
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: '#9CA3AF' }}>Pay Period</p>
-                            <p className="text-sm font-bold" style={{ color: '#374151' }}>
-                                1 {MONTHS[p.month - 1].slice(0, 3)} {p.year} — {p.days_in_month} {MONTHS[p.month - 1].slice(0, 3)} {p.year}
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1.5 text-xs" style={{ color: '#6B7280' }}>
-                                <Clock className="w-3.5 h-3.5" />
-                                Working days: <strong style={{ color: '#111827' }}>{p.days_in_month}</strong>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs" style={{ color: '#6B7280' }}>
-                                <CheckCircle className="w-3.5 h-3.5" />
-                                Paid days: <strong style={{ color: '#111827' }}>{paidDays}</strong>
-                            </div>
-                            {p.paid_at && (
-                                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full"
-                                    style={{ background: '#DCFCE7', color: '#16A34A' }}>
-                                    ✓ Paid {format(new Date(p.paid_at), 'dd MMM yyyy')}
-                                </span>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Breakdown bar */}
-                    <SalaryBreakdownBar payslip={p} />
-                </div>
-
-                {/* Pay Element Totals table */}
-                <div className="rounded-2xl overflow-hidden mb-5"
-                    style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-
-                    {/* Table header */}
-                    <div className="flex items-center justify-between px-5 py-3.5"
-                        style={{ borderBottom: '1px solid #F3F4F6' }}>
-                        <div className="flex items-center gap-2">
-                            <BarChart3 className="w-4 h-4" style={{ color: '#2563EB' }} />
-                            <h3 className="text-sm font-bold" style={{ color: '#111827' }}>Pay Element Totals</h3>
-                        </div>
-                    </div>
-
-                    {/* Column headers */}
-                    <div className="grid px-5 py-2.5" style={{
-                        gridTemplateColumns: '2fr 1.2fr 1.2fr 1.2fr',
-                        borderBottom: '1px solid #F3F4F6',
-                        background: '#F9FAFB'
-                    }}>
-                        {['Pay Element', 'Category', 'Amount', 'Type'].map(col => (
-                            <span key={col} className="text-[10px] font-black uppercase tracking-wider" style={{ color: '#9CA3AF' }}>{col}</span>
-                        ))}
-                    </div>
-
-                    {/* Rows */}
-                    {payElements.map((el, i) => (
-                        <div key={el.label}
-                            className="grid px-5 py-3.5 items-center transition-colors hover:bg-[#F9FAFB]"
-                            style={{
-                                gridTemplateColumns: '2fr 1.2fr 1.2fr 1.2fr',
-                                borderBottom: i < payElements.length - 1 ? '1px solid #F3F4F6' : 'none'
-                            }}>
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-1.5 h-5 rounded-full" style={{ background: el.color }} />
-                                <span className="text-sm font-semibold" style={{ color: '#111827' }}>{el.label}</span>
-                                {el.note && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#F3F4F6', color: '#6B7280' }}>{el.note}</span>}
-                            </div>
-                            <div>
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                                    style={{ background: el.catBg, color: el.catText }}>
-                                    {el.category}
-                                </span>
-                            </div>
-                            <span className="text-sm font-bold" style={{ color: el.type === 'deduction' ? '#DC2626' : '#111827' }}>
-                                {el.type === 'deduction' ? '-' : ''}{fmtFull(el.amount)}
-                            </span>
-                            <div className="flex items-center gap-1">
-                                {el.type === 'earning'
-                                    ? <TrendingUp className="w-3.5 h-3.5" style={{ color: '#16A34A' }} />
-                                    : <TrendingDown className="w-3.5 h-3.5" style={{ color: '#DC2626' }} />}
-                                <span className="text-[10px] font-bold capitalize" style={{ color: el.type === 'earning' ? '#16A34A' : '#DC2626' }}>
-                                    {el.type}
-                                </span>
-                            </div>
-                        </div>
-                    ))}
-
-                    {/* Totals footer */}
-                    <div className="grid px-5 py-4 items-center rounded-b-2xl"
-                        style={{
-                            gridTemplateColumns: '2fr 1.2fr 1.2fr 1.2fr',
-                            background: '#F9FAFB',
-                            borderTop: '2px solid #E5E7EB'
-                        }}>
-                        <span className="text-sm font-black" style={{ color: '#111827' }}>Gross Earnings</span>
-                        <span />
-                        <span className="text-sm font-black" style={{ color: '#16A34A' }}>{fmtFull(gross)}</span>
-                        <span />
-                    </div>
-                </div>
-
-                {/* Net Pay card */}
-                <div className="rounded-2xl p-6 flex items-center justify-between"
-                    style={{ background: 'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)', border: '1px solid #BFDBFE' }}>
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-                            style={{ background: '#2563EB' }}>
-                            <Wallet className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-bold uppercase tracking-wider mb-0.5" style={{ color: '#2563EB' }}>Net Pay (Take Home)</p>
-                            <p className="text-3xl font-black" style={{ color: '#1E3A8A' }}>{fmtFull(p.net_pay)}</p>
-                        </div>
-                    </div>
-                    <div className="text-right hidden md:block">
-                        <p className="text-xs" style={{ color: '#3B82F6' }}>
-                            Gross <strong>{fmtFull(gross)}</strong> − Deductions <strong style={{ color: '#DC2626' }}>{fmtFull(deductions)}</strong>
-                        </p>
-                        <p className="text-xs mt-1" style={{ color: '#3B82F6' }}>
-                            {MONTHS[p.month - 1]} {p.year} • {paidDays}/{p.days_in_month} days paid
-                        </p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // ── Loading ────────────────────────────────────────────────────────────
-    if (loading) {
-        return (
-            <div className="max-w-4xl mx-auto px-4 py-6">
-                <EmployeeProfileHeader user={user} />
-                <div className="flex items-center justify-center py-20">
-                    <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Loading payslips…</span>
-                </div>
-            </div>
-        );
-    }
-
-    // ── Payslip List View ─────────────────────────────────────────────────
-    // Build chart data from payslips
-    const chartData = [...payslips].reverse().slice(-6).map(p => ({
-        name: `${MONTHS[p.month - 1].slice(0, 3)} ${p.year}`,
-        'Net Pay': p.net_pay,
-        'Basic': p.basic_salary,
-    }));
-
+  // ── Loading ──
+  if (loading) {
     return (
-        <div className="max-w-4xl mx-auto px-4 py-6">
-            {/* Profile header */}
-            <EmployeeProfileHeader user={user} lastLogin={lastLogin} />
-
-            {/* Page title row */}
-            <div className="flex items-center justify-between mb-5">
-                <div>
-                    <h1 className="text-xl font-black" style={{ color: '#111827' }}>My Payslips</h1>
-                    <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>
-                        {payslips.length} payslip{payslips.length !== 1 ? 's' : ''} available
-                    </p>
-                </div>
-            </div>
-
-            {payslips.length === 0 ? (
-                /* Empty state */
-                <div className="flex flex-col items-center py-20 rounded-2xl"
-                    style={{ background: '#F9FAFB', border: '1px dashed #D1D5DB' }}>
-                    <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
-                        style={{ background: '#EFF6FF' }}>
-                        <FileText className="w-8 h-8" style={{ color: '#93C5FD' }} />
-                    </div>
-                    <p className="text-base font-bold mb-1" style={{ color: '#374151' }}>No payslips yet</p>
-                    <p className="text-sm text-center max-w-xs" style={{ color: '#9CA3AF' }}>
-                        Your payslips will appear here once your salary has been processed and marked as paid.
-                    </p>
-                </div>
-            ) : (
-                <div className="space-y-5">
-                    {/* Salary trend chart */}
-                    {chartData.length > 1 && (
-                        <div className="rounded-2xl p-5"
-                            style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                            <p className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#9CA3AF' }}>
-                                Salary Trend (last {chartData.length} months)
-                            </p>
-                            <div style={{ height: 120 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barGap={4}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-                                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#9CA3AF', fontWeight: 600 }} axisLine={false} tickLine={false} />
-                                        <YAxis tick={{ fontSize: 9, fill: '#D1D5DB' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
-                                        <Tooltip formatter={(v: any) => [fmtFull(v)]} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E5E7EB' }} />
-                                        <Bar dataKey="Net Pay" fill="#2563EB" radius={[4, 4, 0, 0]} />
-                                        <Bar dataKey="Basic" fill="#BFDBFE" radius={[4, 4, 0, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Payslip cards */}
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                        {payslips.map((p) => {
-                            const deductions = p.lop_amount + p.tds;
-                            const gross = p.basic_salary + p.incentive + p.increment;
-                            return (
-                                <div key={p.id}
-                                    onClick={() => setSelectedPayslip(p)}
-                                    className="rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:scale-[1.01]"
-                                    style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
-                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#BFDBFE'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(37,99,235,0.10)'; }}
-                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#E5E7EB'; (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)'; }}>
-
-                                    {/* Month + year header */}
-                                    <div className="flex items-start justify-between mb-3">
-                                        <div>
-                                            <p className="text-base font-black" style={{ color: '#111827' }}>
-                                                {MONTHS[p.month - 1]} {p.year}
-                                            </p>
-                                            <p className="text-[10px] mt-0.5" style={{ color: '#9CA3AF' }}>
-                                                {p.days_in_month} days • {p.selected_days - p.lop_days} paid
-                                                {p.lop_days > 0 && ` • ${p.lop_days} LOP`}
-                                            </p>
-                                        </div>
-                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
-                                            style={{ background: '#DCFCE7', color: '#16A34A' }}>✓ Paid</span>
-                                    </div>
-
-                                    {/* Mini breakdown bar */}
-                                    <div className="flex h-1.5 rounded-full overflow-hidden mb-3 gap-0.5">
-                                        {[
-                                            { v: p.basic_salary, c: '#2563EB' },
-                                            { v: p.incentive, c: '#16A34A' },
-                                            { v: p.increment, c: '#D97706' },
-                                            { v: deductions, c: '#DC2626' },
-                                        ].map((seg, i) => seg.v > 0 && (
-                                            <div key={i} style={{ flex: seg.v, background: seg.c }} />
-                                        ))}
-                                    </div>
-
-                                    {/* Key numbers */}
-                                    <div className="space-y-1.5 mb-3">
-                                        <div className="flex justify-between text-xs">
-                                            <span style={{ color: '#6B7280' }}>Basic Salary</span>
-                                            <span className="font-semibold" style={{ color: '#111827' }}>{fmt(p.basic_salary)}</span>
-                                        </div>
-                                        {p.incentive > 0 && (
-                                            <div className="flex justify-between text-xs">
-                                                <span style={{ color: '#6B7280' }}>Incentive</span>
-                                                <span className="font-semibold" style={{ color: '#16A34A' }}>+{fmt(p.incentive)}</span>
-                                            </div>
-                                        )}
-                                        {p.increment > 0 && (
-                                            <div className="flex justify-between text-xs">
-                                                <span style={{ color: '#6B7280' }}>Increment</span>
-                                                <span className="font-semibold" style={{ color: '#D97706' }}>+{fmt(p.increment)}</span>
-                                            </div>
-                                        )}
-                                        {deductions > 0 && (
-                                            <div className="flex justify-between text-xs">
-                                                <span style={{ color: '#6B7280' }}>Deductions</span>
-                                                <span className="font-semibold" style={{ color: '#DC2626' }}>-{fmt(deductions)}</span>
-                                            </div>
-                                        )}
-                                        <div className="flex justify-between pt-1.5" style={{ borderTop: '1px solid #F3F4F6' }}>
-                                            <span className="text-xs font-bold" style={{ color: '#374151' }}>Net Pay</span>
-                                            <span className="text-sm font-black" style={{ color: '#2563EB' }}>{fmt(p.net_pay)}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Footer */}
-                                    <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid #F3F4F6' }}>
-                                        <button
-                                            onClick={(e) => downloadPayslip(p, e)}
-                                            className="flex items-center gap-1 text-[10px] font-bold transition-colors hover:text-primary"
-                                            style={{ color: '#9CA3AF' }}>
-                                            <Download className="w-3 h-3" /> Download
-                                        </button>
-                                        <span className="flex items-center gap-0.5 text-[10px] font-bold" style={{ color: '#2563EB' }}>
-                                            View Details <ChevronRight className="w-3 h-3" />
-                                        </span>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        <EmployeeProfileHeader user={user} />
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="ml-3 text-sm text-gray-500">Loading payslips…</span>
         </div>
+      </div>
     );
+  }
+
+  // ── Chart data ──
+  const chartData = [...payslips].reverse().slice(-6).map(p => ({
+    name:      `${MONTHS[p.month - 1].slice(0, 3)} ${p.year}`,
+    'Net Pay': p.net_pay,
+    'Basic':   p.basic_salary,
+  }));
+
+  // ── List view ──
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-6">
+      <EmployeeProfileHeader user={user} />
+
+      {/* Page title */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-xl font-black text-gray-900">My Payslips</h1>
+          <p className="text-xs mt-0.5 text-gray-500">
+            {payslips.length} payslip{payslips.length !== 1 ? 's' : ''} available · Click any month to view &amp; download
+          </p>
+        </div>
+      </div>
+
+      {payslips.length === 0 ? (
+        <div className="flex flex-col items-center py-20 rounded-2xl bg-gray-50 border border-dashed border-gray-300">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-blue-50">
+            <FileText className="w-8 h-8 text-blue-300" />
+          </div>
+          <p className="text-base font-bold text-gray-700 mb-1">No payslips yet</p>
+          <p className="text-sm text-center max-w-xs text-gray-400">
+            Your payslips will appear here once your salary has been processed and marked as paid.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+
+          {/* Salary trend chart */}
+          {chartData.length > 1 && (
+            <div className="rounded-2xl p-5 bg-white border border-gray-200"
+              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
+                Monthly Salary Trend (last {chartData.length} months)
+              </p>
+              <div style={{ height: 130 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barGap={4}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#9CA3AF', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 9, fill: '#D1D5DB' }} axisLine={false} tickLine={false}
+                      tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(v: any) => [fmtFull(v)]}
+                      contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E5E7EB' }} />
+                    <Bar dataKey="Net Pay" fill="#16A34A" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Basic"   fill="#BFDBFE" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex gap-4 mt-2">
+                <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                  <div className="w-2.5 h-2.5 rounded-sm bg-green-600" /> Net Pay
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                  <div className="w-2.5 h-2.5 rounded-sm bg-blue-200" /> Basic Salary
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Payslip cards grid */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {payslips.map(p => (
+              <PayslipCard key={p.id} p={p} onClick={() => setSelectedPayslip(p)} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom';
 import { EnhancedPaymentAuditWidget } from '@/components/payment/EnhancedPaymentAuditWidget';
 import { AuditHistoryWidget } from '@/components/payment/AuditHistoryWidget';
 import PettyCashAuditPage from '@/pages/accounts/PettyCashAuditPage';
+import { RecentSalesOrdersWidget } from '@/components/RecentSalesOrdersWidget';
 
 export default function DirectorDailyWorkflow() {
     const { user } = useAuth();
@@ -79,6 +80,11 @@ export default function DirectorDailyWorkflow() {
                     <PettyCashAuditPage />
                 </TabsContent>
             </Tabs>
+
+            {/* Sales Orders visible to Director */}
+            <div className="mt-6">
+                <RecentSalesOrdersWidget title="Sales Orders — Live Feed" limit={10} />
+            </div>
         </motion.div>
     );
 }

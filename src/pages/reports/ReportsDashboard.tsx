@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
-import { Download, FileText, RefreshCw, TrendingUp, Package, Truck, Users, ShoppingBag, IndianRupee, CheckCircle2 } from 'lucide-react';
+import { Download, FileText, RefreshCw, TrendingUp, Package, Truck, Users, ShoppingBag, IndianRupee, CheckCircle2, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
@@ -16,7 +17,18 @@ const REPORT_TYPES = [
   { id: 'collection', label: 'Cash Collection Report', icon: TrendingUp, color: 'bg-indigo-50 text-indigo-700', description: 'COD collected by driver, outstanding dues, UPI receipts' },
 ];
 
+// Reports that have a dedicated detail page
+const DETAIL_ROUTES: Record<string, string> = {
+  sales:      '/reports/sales',
+  inventory:  '/reports/inventory',
+  delivery:   '/reports/delivery',
+  attendance: '/reports/attendance',
+  purchase:   '/reports/purchase',
+  collection: '/reports/collection',
+};
+
 export default function ReportsDashboard() {
+  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [generating, setGenerating] = useState<string | null>(null);
 
@@ -79,7 +91,7 @@ export default function ReportsDashboard() {
         sheetName = 'Inventory';
       } else if (reportId === 'delivery') {
         const { data: trips } = await supabase
-          .from('trips')
+          .from('logistics_trips')
           .select(`trip_number, status, vehicle_number, orders:trip_orders(delivery_status, cash_collected, driver_notes, order:sales_orders(order_number, net_amount, customer:customers(shop_name, area)))`)
           .eq('trip_date', selectedDate);
 
@@ -214,18 +226,29 @@ export default function ReportsDashboard() {
               <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${report.color}`}>
                 <report.icon className="h-5 w-5" />
               </div>
-              <button
-                onClick={() => generateReport(report.id)}
-                disabled={generating === report.id}
-                className="flex items-center gap-1.5 rounded-xl bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
-              >
-                {generating === report.id ? (
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Download className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-2">
+                {DETAIL_ROUTES[report.id] && (
+                  <button
+                    onClick={() => navigate(DETAIL_ROUTES[report.id])}
+                    className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    View
+                  </button>
                 )}
-                {generating === report.id ? 'Generating...' : 'Download'}
-              </button>
+                <button
+                  onClick={() => generateReport(report.id)}
+                  disabled={generating === report.id}
+                  className="flex items-center gap-1.5 rounded-xl bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
+                >
+                  {generating === report.id ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  {generating === report.id ? 'Generating...' : 'Download'}
+                </button>
+              </div>
             </div>
             <div>
               <h3 className="font-semibold text-gray-800">{report.label}</h3>

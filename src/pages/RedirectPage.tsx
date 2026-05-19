@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 
 export function RedirectPage() {
-  const { user, isLoading, session } = useAuth();
+  const { user, isLoading, session, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -19,7 +19,7 @@ export function RedirectPage() {
       const roleRoutes: Record<string, string> = {
         // ── IGO Chain roles ──────────────────────────────────
         employee:                  '/employee-dashboard',
-        hr:                        '/employee-activity',
+        hr:                        '/hr-dashboard',
         admin:                     '/admin-dashboard',
         ceo:                       '/ceo-dashboard',
         accounts:                  '/accounts-execution',
@@ -44,6 +44,7 @@ export function RedirectPage() {
         palm_cafe_manager:         '/cafe/manager',
         director:                  '/director/workflow',
         // ── Farmers Factory roles (new) ──────────────────────
+        ff_operations_manager:     '/ff-operations',
         purchase_manager:          '/purchase/produce',
         warehouse_manager:         '/warehouse',
         qc_manager:                '/warehouse/qc',
@@ -56,6 +57,12 @@ export function RedirectPage() {
 
       const normalizedRole = role.toLowerCase();
       let destination = roleRoutes[normalizedRole] || '/day-start';
+
+      // Skip Supabase queries for demo users (no real DB record)
+      if (userId.startsWith('demo-')) {
+        navigate(destination, { replace: true });
+        return;
+      }
 
       // Optimized: Parallelized checks
       if (normalizedRole === 'employee') {
@@ -117,7 +124,7 @@ export function RedirectPage() {
   useEffect(() => {
     if (isLoading) return;
 
-    if (!session) {
+    if (!isAuthenticated) {
       navigate('/login', { replace: true });
       return;
     }

@@ -36,10 +36,22 @@ const QCInspection = lazy(() => import('./pages/warehouse/QCInspection'));
 const InventoryDashboard = lazy(() => import('./pages/warehouse/InventoryDashboard'));
 const ReturnsDashboard = lazy(() => import('./pages/warehouse/ReturnsDashboard'));
 const QCRejections = lazy(() => import('./pages/warehouse/QCRejections'));
+const DeductionMemos = lazy(() => import('./pages/warehouse/DeductionMemos'));
+
+// Transit / Gate Entry Module
+const TransitDashboard = lazy(() => import('./pages/transit/TransitDashboard'));
+const GateEntryPage = lazy(() => import('./pages/transit/GateEntryPage'));
+const TransitRecordDetail = lazy(() => import('./pages/transit/TransitRecordDetail'));
+
+// Payment Approval Module
+const VendorPaymentForm = lazy(() => import('./pages/purchase/VendorPaymentForm'));
+const PaymentApprovalQueue = lazy(() => import('./pages/purchase/PaymentApprovalQueue'));
+const FinancePaymentProcessPage = lazy(() => import('./pages/finance/FinancePaymentProcessPage'));
 
 // Sales Module
 const SalesDashboard = lazy(() => import('./pages/sales/SalesDashboard'));
 const NewOrder = lazy(() => import('./pages/sales/NewOrder'));
+const BulkOrderPage = lazy(() => import('./pages/sales/BulkOrderPage'));
 const OrderListPage = lazy(() => import('./pages/sales/OrderListPage'));
 const OrderDetail = lazy(() => import('./pages/sales/OrderDetail'));
 const CustomerManagement = lazy(() => import('./pages/sales/CustomerManagement'));
@@ -65,6 +77,12 @@ const ProductFormPage = lazy(() => import('./pages/catalog/ProductForm'));
 const ReportsDashboard = lazy(() => import('./pages/reports/ReportsDashboard'));
 const PLReport = lazy(() => import('./pages/reports/PLReport'));
 const CustomReportBuilder = lazy(() => import('./pages/reports/CustomReportBuilder'));
+const PurchaseReportPage      = lazy(() => import('./pages/reports/PurchaseReportPage'));
+const DailySalesReportPage    = lazy(() => import('./pages/reports/DailySalesReportPage'));
+const InventoryReportPage     = lazy(() => import('./pages/reports/InventoryReportPage'));
+const DeliveryReportPage      = lazy(() => import('./pages/reports/DeliveryReportPage'));
+const AttendanceReportPage    = lazy(() => import('./pages/reports/AttendanceReportPage'));
+const CashCollectionReportPage = lazy(() => import('./pages/reports/CashCollectionReportPage'));
 
 // Hub Management Module
 const HubManagementPage = lazy(() => import('./pages/admin/HubManagementPage'));
@@ -83,6 +101,9 @@ const PurchaseBillsPage        = lazy(() => import('./pages/ff-operations/purcha
 const RecurringBillsPage       = lazy(() => import('./pages/ff-operations/purchase/RecurringBillsPage'));
 const PaymentsMadePage         = lazy(() => import('./pages/ff-operations/purchase/PaymentsMadePage'));
 const VendorCreditsPage        = lazy(() => import('./pages/ff-operations/purchase/VendorCreditsPage'));
+const AutoPOPage               = lazy(() => import('./pages/ff-operations/purchase/AutoPOPage'));
+const AutoBillPage             = lazy(() => import('./pages/ff-operations/purchase/AutoBillPage'));
+const BuyPage                  = lazy(() => import('./pages/ff-operations/purchase/BuyPage'));
 
 // FF Operations — Sales sub-pages
 const SalesCustomersPage       = lazy(() => import('./pages/ff-operations/sales/SalesCustomersPage'));
@@ -144,6 +165,7 @@ const EmployeeActivityPage = lazy(() => import('@/pages/hr/EmployeeActivityPage'
 const LOPManagementPage = lazy(() => import('@/pages/hr/LOPManagementPage'));
 const LeaveApprovalsPage = lazy(() => import('@/pages/hr/LeaveApprovalsPage'));
 const HRPaymentAuditPage = lazy(() => import('@/pages/hr/HRPaymentAuditPage'));
+const HRDashboardPage = lazyNamed(() => import('@/pages/hr/HRDashboardPage'), 'HRDashboardPage');
 const AdminQueuePage = lazyNamed(() => import('@/pages/admin/AdminQueuePage'), 'AdminQueuePage');
 const PaymentSearchPage = lazyNamed(() => import('@/pages/admin/PaymentSearchPage'), 'PaymentSearchPage');
 const UserManagementPage = lazyNamed(() => import('@/pages/admin/UserManagementPage'), 'UserManagementPage');
@@ -325,7 +347,7 @@ const ALL_STAFF_ROLES = [
   'site_visit_farm_manager', 'cafe_manager', 'palm_cafe_manager',
   // Farmers Factory
   'purchase_manager', 'warehouse_manager', 'qc_manager', 'field_executive',
-  'tele_caller', 'driver', 'back_office', 'shift_employee',
+  'tele_caller', 'driver', 'back_office', 'shift_employee', 'ff_operations_manager',
 ];
 
 // Operations + management roles (no pure field/driver roles)
@@ -334,6 +356,7 @@ const OPS_ROLES = [
   'hr', 'accounts', 'back_office',
   'purchase_manager', 'purchase_head', 'warehouse_manager', 'qc_manager',
   'field_executive', 'tele_caller',
+  'ff_operations_manager',
 ];
 
 const ProtectedRoute = ({
@@ -458,7 +481,6 @@ const AppRoutes = () => {
       <Route path="/jv-projects" element={<ProtectedRoute allowedRoles={['employee', 'admin', 'gmo', 'smo']}><EmployeeProjectsPage filters={{ project_type: 'jv' }} /></ProtectedRoute>} />
       <Route path="/leave-request" element={<ProtectedRoute allowedRoles={ALL_STAFF_ROLES}><LeaveRequestPage /></ProtectedRoute>} />
       <Route path="/my-tasks" element={<ProtectedRoute allowedRoles={ALL_STAFF_ROLES}><MyTasksPage /></ProtectedRoute>} />
-      <Route path="/my-payslips" element={<ProtectedRoute allowedRoles={ALL_STAFF_ROLES}><EmployeeMyPayslipsPage /></ProtectedRoute>} />
       <Route path="/my-sops" element={<ProtectedRoute allowedRoles={ALL_STAFF_ROLES}><MySOPsPage /></ProtectedRoute>} />
 
       {/* Core Manager Module Routes */}
@@ -510,6 +532,7 @@ const AppRoutes = () => {
       <Route path="/chat/*" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
 
       {/* HR Routes */}
+      <Route path="/hr-dashboard" element={<ProtectedRoute allowedRoles={['hr', 'admin', 'ceo']}><HRDashboardPage /></ProtectedRoute>} />
       <Route path="/employee-activity" element={<ProtectedRoute allowedRoles={['hr', 'admin', 'auditor', 'ceo', 'gm', 'boi', 'director', 'Director']}><EmployeeActivityPage /></ProtectedRoute>} />
       <Route path="/selfie-attendance" element={<ProtectedRoute allowedRoles={['hr', 'admin', 'auditor']}><SelfieViewingPage /></ProtectedRoute>} />
       <Route path="/lop-management" element={<ProtectedRoute allowedRoles={['hr', 'auditor']}><LOPManagementPage /></ProtectedRoute>} />
@@ -525,7 +548,7 @@ const AppRoutes = () => {
       <Route path="/hr/employee-payroll/:profileId" element={<ProtectedRoute allowedRoles={['hr', 'admin', 'accounts', 'ceo', 'auditor']}><HREmployeePayrollProfile /></ProtectedRoute>} />
       <Route path="/hr/approval" element={<ProtectedRoute allowedRoles={['hr', 'admin', 'accounts', 'ceo', 'auditor', 'Auditor', 'director', 'Director']}><HRSalaryApprovalPage /></ProtectedRoute>} />
       <Route path="/hr/salary-calculation" element={<ProtectedRoute allowedRoles={['hr', 'admin', 'accounts', 'ceo']}><HRSalaryCalculationPage /></ProtectedRoute>} />
-      <Route path="/my-payslips" element={<ProtectedRoute allowedRoles={['employee', 'admin', 'hr', 'ceo']}><EmployeeMyPayslipsPage /></ProtectedRoute>} />
+      <Route path="/my-payslips" element={<ProtectedRoute allowedRoles={['employee', 'admin', 'hr', 'ceo', 'ff_operations_manager']}><EmployeeMyPayslipsPage /></ProtectedRoute>} />
 
       {/* Onboarding Module Routes */}
       {/* Public route for new employees - no auth required */}
@@ -697,7 +720,7 @@ const AppRoutes = () => {
       {/* Shared Routes - Open Visibility for all Solver roles */}
       <Route path="/rsh/escalations" element={<ProtectedRoute allowedRoles={['rsh', 'RSH', 'employee', 'ceo', 'admin', 'boi', 'gm']}><RSHEscalationDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/escalations" element={<ProtectedRoute allowedRoles={['boi', 'gmo', 'smo', 'gm', 'admin', 'ceo', 'nsm', 'datateam', 'data_team', 'data', 'bd_data', 'employee']}><UnifiedEscalationsPage /></ProtectedRoute>} />
-      <Route path="/dashboard/my-escalations" element={<ProtectedRoute allowedRoles={['employee', 'hr', 'accounts', 'admin', 'smo', 'nsm', 'gmo', 'gm', 'boi', 'datateam', 'ceo', 'purchase_head', 'vendor_head', 'auditor', 'director', 'Director', 'rsh', 'RSH', 'bd_data']}><MyEscalationsPage /></ProtectedRoute>} />
+      <Route path="/dashboard/my-escalations" element={<ProtectedRoute allowedRoles={['employee', 'hr', 'accounts', 'admin', 'smo', 'nsm', 'gmo', 'gm', 'boi', 'datateam', 'ceo', 'purchase_head', 'vendor_head', 'auditor', 'director', 'Director', 'rsh', 'RSH', 'bd_data', 'ff_operations_manager']}><MyEscalationsPage /></ProtectedRoute>} />
       <Route path="/audit-logs" element={<ProtectedRoute allowedRoles={['admin', 'ceo', 'auditor']}><AuditLogPage /></ProtectedRoute>} />
       <Route path="/attendance-calendar" element={<ProtectedRoute allowedRoles={['admin', 'ceo', 'hr', 'auditor']}><AttendanceCalendarPage /></ProtectedRoute>} />
       <Route path="/employee-directory" element={<ProtectedRoute allowedRoles={['admin', 'hr', 'auditor', 'ceo']}><EmployeeDirectoryPage /></ProtectedRoute>} />
@@ -718,7 +741,7 @@ const AppRoutes = () => {
       <Route path="/purchase" element={<ProtectedRoute allowedRoles={OPS_ROLES}><FreshPurchaseDashboard /></ProtectedRoute>} />
       <Route path="/purchase/new" element={<ProtectedRoute allowedRoles={OPS_ROLES}><PurchaseOrderForm /></ProtectedRoute>} />
       <Route path="/purchase/:id/edit" element={<ProtectedRoute allowedRoles={OPS_ROLES}><PurchaseOrderForm /></ProtectedRoute>} />
-      <Route path="/purchase/vendors" element={<ProtectedRoute allowedRoles={[...OPS_ROLES, 'admin']}><PurchaseVendorsPage /></ProtectedRoute>} />
+      <Route path="/purchase/vendors" element={<ProtectedRoute allowedRoles={[...OPS_ROLES, 'admin', 'ff_operations_manager']}><PurchaseVendorsPage /></ProtectedRoute>} />
       <Route path="/purchase/rate-comparison" element={<ProtectedRoute allowedRoles={OPS_ROLES}><RateComparison /></ProtectedRoute>} />
       <Route path="/purchase/market-rates" element={<ProtectedRoute allowedRoles={OPS_ROLES}><MarketRateEntry /></ProtectedRoute>} />
       <Route path="/purchase/forecast" element={<ProtectedRoute allowedRoles={OPS_ROLES}><DemandForecast /></ProtectedRoute>} />
@@ -732,10 +755,22 @@ const AppRoutes = () => {
       <Route path="/warehouse/inventory" element={<ProtectedRoute allowedRoles={OPS_ROLES}><InventoryDashboard /></ProtectedRoute>} />
       <Route path="/warehouse/returns" element={<ProtectedRoute allowedRoles={OPS_ROLES}><ReturnsDashboard /></ProtectedRoute>} />
       <Route path="/warehouse/qc-rejections" element={<ProtectedRoute allowedRoles={OPS_ROLES}><QCRejections /></ProtectedRoute>} />
+      <Route path="/warehouse/deductions" element={<ProtectedRoute allowedRoles={OPS_ROLES}><DeductionMemos /></ProtectedRoute>} />
+
+      {/* Transit / Gate Entry Module */}
+      <Route path="/transit" element={<ProtectedRoute allowedRoles={OPS_ROLES}><TransitDashboard /></ProtectedRoute>} />
+      <Route path="/transit/gate-entry" element={<ProtectedRoute allowedRoles={OPS_ROLES}><GateEntryPage /></ProtectedRoute>} />
+      <Route path="/transit/:id" element={<ProtectedRoute allowedRoles={OPS_ROLES}><TransitRecordDetail /></ProtectedRoute>} />
+
+      {/* Payment Approval Module */}
+      <Route path="/purchase/payment-form" element={<ProtectedRoute allowedRoles={OPS_ROLES}><VendorPaymentForm /></ProtectedRoute>} />
+      <Route path="/purchase/payment-approvals" element={<ProtectedRoute allowedRoles={OPS_ROLES}><PaymentApprovalQueue /></ProtectedRoute>} />
+      <Route path="/finance/process-payments" element={<ProtectedRoute allowedRoles={OPS_ROLES}><FinancePaymentProcessPage /></ProtectedRoute>} />
 
       {/* Sales Module */}
       <Route path="/sales" element={<ProtectedRoute allowedRoles={OPS_ROLES}><SalesDashboard /></ProtectedRoute>} />
       <Route path="/sales/new-order" element={<ProtectedRoute allowedRoles={OPS_ROLES}><NewOrder /></ProtectedRoute>} />
+      <Route path="/sales/bulk-order" element={<ProtectedRoute allowedRoles={OPS_ROLES}><BulkOrderPage /></ProtectedRoute>} />
       <Route path="/sales/orders" element={<ProtectedRoute allowedRoles={OPS_ROLES}><OrderListPage /></ProtectedRoute>} />
       <Route path="/sales/orders/:id" element={<ProtectedRoute allowedRoles={OPS_ROLES}><OrderDetail /></ProtectedRoute>} />
       <Route path="/sales/customers" element={<ProtectedRoute allowedRoles={OPS_ROLES}><CustomerManagement /></ProtectedRoute>} />
@@ -762,32 +797,41 @@ const AppRoutes = () => {
       <Route path="/reports" element={<ProtectedRoute allowedRoles={OPS_ROLES}><ReportsDashboard /></ProtectedRoute>} />
       <Route path="/reports/pl" element={<ProtectedRoute allowedRoles={OPS_ROLES}><PLReport /></ProtectedRoute>} />
       <Route path="/reports/custom" element={<ProtectedRoute allowedRoles={OPS_ROLES}><CustomReportBuilder /></ProtectedRoute>} />
+      <Route path="/reports/purchase"    element={<ProtectedRoute allowedRoles={OPS_ROLES}><PurchaseReportPage /></ProtectedRoute>} />
+      <Route path="/reports/sales"       element={<ProtectedRoute allowedRoles={OPS_ROLES}><DailySalesReportPage /></ProtectedRoute>} />
+      <Route path="/reports/inventory"   element={<ProtectedRoute allowedRoles={OPS_ROLES}><InventoryReportPage /></ProtectedRoute>} />
+      <Route path="/reports/delivery"    element={<ProtectedRoute allowedRoles={OPS_ROLES}><DeliveryReportPage /></ProtectedRoute>} />
+      <Route path="/reports/attendance"  element={<ProtectedRoute allowedRoles={OPS_ROLES}><AttendanceReportPage /></ProtectedRoute>} />
+      <Route path="/reports/collection"  element={<ProtectedRoute allowedRoles={OPS_ROLES}><CashCollectionReportPage /></ProtectedRoute>} />
 
       {/* Hub Management */}
-      <Route path="/admin/hubs" element={<ProtectedRoute allowedRoles={['admin', 'ceo']}><HubManagementPage /></ProtectedRoute>} />
-      <Route path="/admin/hubs/:hubId" element={<ProtectedRoute allowedRoles={['admin', 'ceo']}><HubManagementPage /></ProtectedRoute>} />
+      <Route path="/admin/hubs" element={<ProtectedRoute allowedRoles={['admin', 'ceo', 'ff_operations_manager']}><HubManagementPage /></ProtectedRoute>} />
+      <Route path="/admin/hubs/:hubId" element={<ProtectedRoute allowedRoles={['admin', 'ceo', 'ff_operations_manager']}><HubManagementPage /></ProtectedRoute>} />
 
       {/* FF Operations Home */}
-      <Route path="/ff-operations" element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head']}><FFOperationsHomePage /></ProtectedRoute>} />
-      <Route path="/ff-operations/items" element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head']}><ItemsPage /></ProtectedRoute>} />
+      <Route path="/ff-operations" element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><FFOperationsHomePage /></ProtectedRoute>} />
+      <Route path="/ff-operations/items" element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><ItemsPage /></ProtectedRoute>} />
 
       {/* FF Operations — Purchase sub-pages */}
-      <Route path="/purchase/expenses"           element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head']}><PurchaseExpensesPage /></ProtectedRoute>} />
-      <Route path="/purchase/recurring-expenses" element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head']}><RecurringExpensesPage /></ProtectedRoute>} />
-      <Route path="/purchase/orders"             element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head']}><PurchaseOrdersPage /></ProtectedRoute>} />
-      <Route path="/purchase/bills"              element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head']}><PurchaseBillsPage /></ProtectedRoute>} />
-      <Route path="/purchase/recurring-bills"    element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head']}><RecurringBillsPage /></ProtectedRoute>} />
-      <Route path="/purchase/payments-made"      element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head']}><PaymentsMadePage /></ProtectedRoute>} />
-      <Route path="/purchase/vendor-credits"     element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head']}><VendorCreditsPage /></ProtectedRoute>} />
+      <Route path="/purchase/expenses"           element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><PurchaseExpensesPage /></ProtectedRoute>} />
+      <Route path="/purchase/recurring-expenses" element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><RecurringExpensesPage /></ProtectedRoute>} />
+      <Route path="/purchase/orders"             element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><PurchaseOrdersPage /></ProtectedRoute>} />
+      <Route path="/purchase/auto-po"            element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><AutoPOPage /></ProtectedRoute>} />
+      <Route path="/purchase/bills"              element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><PurchaseBillsPage /></ProtectedRoute>} />
+      <Route path="/purchase/auto-bill"          element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><AutoBillPage /></ProtectedRoute>} />
+      <Route path="/purchase/buy"               element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><BuyPage /></ProtectedRoute>} />
+      <Route path="/purchase/recurring-bills"    element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><RecurringBillsPage /></ProtectedRoute>} />
+      <Route path="/purchase/payments-made"      element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><PaymentsMadePage /></ProtectedRoute>} />
+      <Route path="/purchase/vendor-credits"     element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><VendorCreditsPage /></ProtectedRoute>} />
 
       {/* FF Operations — Sales sub-pages */}
-      <Route path="/sales/customers"             element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive']}><SalesCustomersPage /></ProtectedRoute>} />
-      <Route path="/sales/orders"                element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive']}><SalesOrdersPage /></ProtectedRoute>} />
-      <Route path="/sales/invoices"              element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive']}><SalesInvoicesPage /></ProtectedRoute>} />
-      <Route path="/sales/recurring-invoices"    element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive']}><RecurringInvoicesPage /></ProtectedRoute>} />
-      <Route path="/sales/delivery-challans"     element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive']}><DeliveryChallansPage /></ProtectedRoute>} />
-      <Route path="/sales/payments-received"     element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive']}><PaymentsReceivedPage /></ProtectedRoute>} />
-      <Route path="/sales/credit-notes"          element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive']}><CreditNotesPage /></ProtectedRoute>} />
+      <Route path="/sales/customers"             element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><SalesCustomersPage /></ProtectedRoute>} />
+      <Route path="/sales/orders"                element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><SalesOrdersPage /></ProtectedRoute>} />
+      <Route path="/sales/invoices"              element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><SalesInvoicesPage /></ProtectedRoute>} />
+      <Route path="/sales/recurring-invoices"    element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><RecurringInvoicesPage /></ProtectedRoute>} />
+      <Route path="/sales/delivery-challans"     element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><DeliveryChallansPage /></ProtectedRoute>} />
+      <Route path="/sales/payments-received"     element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><PaymentsReceivedPage /></ProtectedRoute>} />
+      <Route path="/sales/credit-notes"          element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><CreditNotesPage /></ProtectedRoute>} />
 
       {/* Finance Module (FF ERP) */}
       <Route path="/finance" element={<ProtectedRoute allowedRoles={OPS_ROLES}><FinanceDashboard /></ProtectedRoute>} />

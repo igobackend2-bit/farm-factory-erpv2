@@ -67,7 +67,6 @@ function BulkAssignModal({ open, onClose, fetchParentData }: { open: boolean, on
                     const { data, error } = await supabase
                         .from('profiles')
                         .select('id, name, email, department, role')
-                        .eq('is_active', true)
                         .order('name');
                     if (error) throw error;
                     setEmployees(data || []);
@@ -186,7 +185,7 @@ function BulkAssignModal({ open, onClose, fetchParentData }: { open: boolean, on
                                     </Label>
                                     <Select value={selectedDept} onValueChange={setSelectedDept}>
                                         <SelectTrigger><SelectValue placeholder="All Departments" /></SelectTrigger>
-                                        <SelectContent>
+                                        <SelectContent position="popper">
                                             <SelectItem value="all">All Departments</SelectItem>
                                             {departments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                                         </SelectContent>
@@ -290,7 +289,7 @@ function BulkAssignModal({ open, onClose, fetchParentData }: { open: boolean, on
                                     <Input type="date" value={specificDate} onChange={e => setSpecificDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full bg-background" /> :
                                     <Select value={recurringDay.toString()} onValueChange={v => setRecurringDay(parseInt(v))}>
                                         <SelectTrigger className="w-full bg-background"><SelectValue placeholder="Pick a day" /></SelectTrigger>
-                                        <SelectContent>
+                                        <SelectContent position="popper">
                                             {DAYS_OF_WEEK_OPTIONS.map(d => <SelectItem key={d.value} value={d.value.toString()}>{d.label}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
@@ -333,6 +332,7 @@ function BulkAssignModal({ open, onClose, fetchParentData }: { open: boolean, on
 function AssignModal({ open, onClose, fetchParentData }: { open: boolean, onClose: () => void, fetchParentData: () => void }) {
     const { user } = useAuth();
     const [employees, setEmployees] = useState<any[]>([]);
+    const [isLoadingEmp, setIsLoadingEmp] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState('');
     const [assignmentType, setAssignmentType] = useState<'one_time' | 'recurring_weekly'>('one_time');
     const [specificDate, setSpecificDate] = useState('');
@@ -342,11 +342,16 @@ function AssignModal({ open, onClose, fetchParentData }: { open: boolean, onClos
 
     useEffect(() => {
         if (open) {
+            setIsLoadingEmp(true);
+            setSelectedEmployee('');
             supabase.from('profiles')
                 .select('id, name, department, role')
-                .eq('is_active', true)
                 .order('name')
-                .then(({ data }) => setEmployees(data || []));
+                .then(({ data, error }) => {
+                    if (error) console.error('Employee fetch error:', error);
+                    setEmployees(data || []);
+                    setIsLoadingEmp(false);
+                });
         }
     }, [open]);
 
@@ -388,23 +393,30 @@ function AssignModal({ open, onClose, fetchParentData }: { open: boolean, onClos
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[450px] max-h-[90vh] flex flex-col p-0 overflow-hidden">
-                <DialogHeader className="p-6 border-b">
+            <DialogContent className="sm:max-w-[450px] flex flex-col p-0">
+                <DialogHeader className="p-6 border-b shrink-0">
                     <DialogTitle>Assign Week Off</DialogTitle>
                 </DialogHeader>
 
-                <ScrollArea className="flex-1 px-6">
-                    <div className="py-6 space-y-6">
-                        <div className="space-y-2">
-                            <Label className="text-sm font-medium">Select Employee</Label>
-                            <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-                                <SelectTrigger className="w-full bg-background"><SelectValue placeholder="Select worker..." /></SelectTrigger>
-                                <SelectContent>
-                                    {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name} ({e.department || 'N/A'})</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                {/* Employee select lives OUTSIDE ScrollArea to avoid overflow clipping */}
+                <div className="px-6 pt-5 pb-3 shrink-0 space-y-1.5">
+                    <Label className="text-sm font-medium">Select Employee</Label>
+                    <Select value={selectedEmployee} onValueChange={setSelectedEmployee} disabled={isLoadingEmp}>
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder={isLoadingEmp ? 'Loading employees…' : employees.length === 0 ? 'No employees found' : 'Select worker...'} />
+                        </SelectTrigger>
+                        <SelectContent position="popper" className="max-h-60 overflow-y-auto">
+                            {employees.map(e => (
+                                <SelectItem key={e.id} value={e.id}>
+                                    {e.name || '(no name)'} {e.department ? `· ${e.department}` : ''}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
 
+                <ScrollArea className="flex-1 px-6 max-h-[55vh]">
+                    <div className="pb-6 space-y-5">
                         <div className="space-y-2">
                             <Label className="text-sm font-medium">Assignment Frequency</Label>
                             <RadioGroup value={assignmentType} onValueChange={v => setAssignmentType(v as any)} className="flex gap-4">
@@ -422,10 +434,12 @@ function AssignModal({ open, onClose, fetchParentData }: { open: boolean, onClos
                         <div className="space-y-2">
                             <Label className="text-sm font-medium">{assignmentType === 'one_time' ? 'Select Date' : 'Select Day of Week'}</Label>
                             {assignmentType === 'one_time' ?
-                                <Input type="date" value={specificDate} onChange={e => setSpecificDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full bg-background" /> :
+                                <Input type="date" value={specificDate} onChange={e => setSpecificDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full" /> :
                                 <Select value={recurringDay.toString()} onValueChange={v => setRecurringDay(parseInt(v))}>
-                                    <SelectTrigger className="w-full bg-background"><SelectValue placeholder="Pick a day" /></SelectTrigger>
-                                    <SelectContent>{DAYS_OF_WEEK_OPTIONS.map(d => <SelectItem key={d.value} value={d.value.toString()}>{d.label}</SelectItem>)}</SelectContent>
+                                    <SelectTrigger className="w-full"><SelectValue placeholder="Pick a day" /></SelectTrigger>
+                                    <SelectContent position="popper">
+                                        {DAYS_OF_WEEK_OPTIONS.map(d => <SelectItem key={d.value} value={d.value.toString()}>{d.label}</SelectItem>)}
+                                    </SelectContent>
                                 </Select>
                             }
                         </div>
@@ -436,14 +450,14 @@ function AssignModal({ open, onClose, fetchParentData }: { open: boolean, onClos
                                 placeholder="Enter reason..."
                                 value={reason}
                                 onChange={e => setReason(e.target.value)}
-                                className="bg-background resize-none"
+                                className="resize-none"
                                 rows={3}
                             />
                         </div>
                     </div>
                 </ScrollArea>
 
-                <DialogFooter className="p-6 border-t bg-background flex gap-2">
+                <DialogFooter className="p-6 border-t shrink-0 flex gap-2">
                     <Button variant="outline" onClick={onClose} className="flex-1 h-11">Cancel</Button>
                     <Button onClick={handleSubmit} disabled={isSubmitting} className="flex-1 h-11">
                         {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Assign Week Off'}
@@ -469,7 +483,6 @@ export default function WeekOffManagementPage() {
                 const { data, error } = await supabase
                     .from('profiles')
                     .select('id, name, department, role')
-                    .eq('is_active', true)
                     .order('name');
                 if (error) throw error;
                 setAllEmployees(data || []);

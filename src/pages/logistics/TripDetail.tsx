@@ -25,7 +25,7 @@ export default function TripDetail() {
     queryKey: ['trip-detail', id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('trips')
+        .from('logistics_trips')
         .select(`
           *,
           trip_orders(
@@ -49,7 +49,7 @@ export default function TripDetail() {
       const update: any = { status };
       if (status === 'in_progress') update.started_at = new Date().toISOString();
       if (status === 'completed') update.completed_at = new Date().toISOString();
-      const { error } = await supabase.from('trips').update(update).eq('id', id!);
+      const { error } = await supabase.from('logistics_trips').update(update).eq('id', id!);
       if (error) throw error;
     },
     onSuccess: () => {

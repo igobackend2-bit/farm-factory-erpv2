@@ -72,6 +72,8 @@ import {
   Target,
   UserCog,
   MessageSquarePlus as Feedback,
+  CheckCircle2,
+  Calculator,
 } from 'lucide-react';
 
 interface NavChild {
@@ -103,9 +105,9 @@ const navigationConfig: NavGroup[] = [
     icon: Clock,
     roles: [
       'employee', 'director', 'Director', 'purchase_head', 'vendor_head',
-      'nsm', 'datateam', 'data_team', 'data', 'boi', 'gmo', 'smo', 'hr', 'gm', 'admin',
+      'nsm', 'datateam', 'data_team', 'data', 'boi', 'gmo', 'smo', 'gm',
       'accounts', 'farmmanager', 'bd_data', 'rsh', 'RSH', 'site_visit_farm_manager',
-      'cafe_manager', 'palm_cafe_manager',
+      'cafe_manager', 'palm_cafe_manager', 'ff_operations_manager',
     ],
     items: [
       { icon: Home,          label: 'My Dashboard',          path: '/employee-dashboard' },
@@ -307,19 +309,25 @@ const navigationConfig: NavGroup[] = [
 
   // ── HR ──────────────────────────────────────────────────────────────────────
   {
-    title: 'Command Center',
+    title: 'HR Home',
     icon: LayoutDashboard,
     roles: ['hr'],
     items: [
-      { icon: ShieldCheck,   label: 'Intelligence Hub',        path: '/management/intelligence' },
-      { icon: Activity,      label: 'Employee Activity',       path: '/employee-activity' },
-      { icon: User,          label: 'Employee Profiles',       path: '/admin/employee-profiles' },
-      { icon: Camera,        label: 'Selfie Attendance',       path: '/selfie-attendance' },
-      { icon: Calendar,      label: 'Attendance Calendar',     path: '/attendance-calendar' },
-      { icon: ClipboardList, label: 'Attendance Roster',       path: '/admin/attendance-roster' },
-      { icon: Users,         label: 'Employee Directory',      path: '/employee-directory' },
-      { icon: CreditCard,    label: 'Payment Audit',           path: '/hr/payment-audit' },
-      { icon: BarChart3,     label: 'Weekly Performance Hub',  path: '/performance-hub' },
+      { icon: LayoutDashboard, label: 'HR Dashboard',  path: '/hr-dashboard' },
+      { icon: History,         label: 'My Requests',   path: '/my-requests' },
+      { icon: Coffee,          label: 'PALM CAFE',     path: '/palm-cafe' },
+      { icon: MessageSquare,   label: 'Chat',          path: '/chat' },
+    ],
+  },
+  {
+    title: 'Attendance & Activity',
+    icon: Activity,
+    roles: ['hr'],
+    items: [
+      { icon: Activity,      label: 'Employee Activity',   path: '/employee-activity' },
+      { icon: Camera,        label: 'Selfie Attendance',   path: '/selfie-attendance' },
+      { icon: ClipboardList, label: 'Attendance Roster',  path: '/admin/attendance-roster' },
+      { icon: Calendar,      label: 'Attendance Calendar', path: '/attendance-calendar' },
     ],
   },
   {
@@ -327,18 +335,31 @@ const navigationConfig: NavGroup[] = [
     icon: Calendar,
     roles: ['hr'],
     items: [
-      { icon: AlertTriangle, label: 'LOP Management',   path: '/lop-management' },
-      { icon: Calendar,      label: 'Leave Approvals',  path: '/leave-approvals' },
-      { icon: Calendar,      label: 'Week Off Mgmt',    path: '/admin/week-off-management' },
+      { icon: Calendar,      label: 'Leave Approvals',         path: '/leave-approvals' },
+      { icon: AlertTriangle, label: 'LOP Management',          path: '/lop-management' },
+      { icon: Calendar,      label: 'Week Off Assignment',     path: '/admin/week-off-management' },
     ],
   },
   {
-    title: 'HR & Payroll',
+    title: 'Payroll & Salary',
     icon: Wallet,
     roles: ['hr'],
     items: [
-      { icon: Users,   label: 'Employee Master', path: '/hr/employee-master' },
-      { icon: Banknote, label: 'Salary Sheet',   path: '/hr/sheet' },
+      { icon: Wallet,    label: 'Payroll Management',  path: '/hr/payroll' },
+      { icon: Banknote,  label: 'Salary Sheet',        path: '/hr/sheet' },
+      { icon: CheckCircle2, label: 'Salary Approval',  path: '/hr/approval' },
+      { icon: Calculator,   label: 'Salary Calculation', path: '/hr/salary-calculation' },
+      { icon: CreditCard,   label: 'Payment Audit',    path: '/hr/payment-audit' },
+    ],
+  },
+  {
+    title: 'Employees',
+    icon: Users,
+    roles: ['hr'],
+    items: [
+      { icon: Users,    label: 'Employee Master',      path: '/hr/employee-master' },
+      { icon: User,     label: 'Employee Profiles',    path: '/admin/employee-profiles' },
+      { icon: Users,    label: 'Employee Directory',   path: '/employee-directory' },
     ],
   },
   {
@@ -346,8 +367,8 @@ const navigationConfig: NavGroup[] = [
     icon: UserPlus,
     roles: ['hr'],
     items: [
-      { icon: UserPlus, label: 'New User',                  path: '/onboarding/new-user' },
-      { icon: History,  label: 'New User Status & History', path: '/onboarding/hr-access' },
+      { icon: UserPlus, label: 'New Employee',                path: '/onboarding/new-user' },
+      { icon: History,  label: 'Onboarding Status',          path: '/onboarding/hr-access' },
     ],
   },
 
@@ -436,31 +457,40 @@ const navigationConfig: NavGroup[] = [
         icon: ShoppingCart, label: 'Purchase', path: '/purchase',
         children: [
           { label: 'Vendors',             path: '/purchase/vendors' },
-          { label: 'Expenses',            path: '/purchase/expenses',           action: true },
-          { label: 'Recurring Expenses',  path: '/purchase/recurring-expenses' },
-          { label: 'Purchase Orders',     path: '/purchase/orders' },
-          { label: 'Bills',               path: '/purchase/bills' },
-          { label: 'Recurring Bills',     path: '/purchase/recurring-bills' },
-          { label: 'Payments Made',       path: '/purchase/payments-made' },
-          { label: 'Vendor Credits',      path: '/purchase/vendor-credits' },
+          { label: 'Purchase Orders',      path: '/purchase/auto-po' },
+          { label: '↳ Auto Bill',         path: '/purchase/auto-bill' },
+          { label: 'New Payment',         path: '/purchase/payment-form' },
+          { label: 'Payment Approvals',   path: '/purchase/payment-approvals' },
         ],
       },
-      { icon: Warehouse, label: 'Warehouse & QC', path: '/warehouse' },
+      {
+        icon: Truck, label: 'Transit / Gate', path: '/transit',
+        children: [
+          { label: 'Transit Dashboard',   path: '/transit' },
+          { label: 'Gate Entry',          path: '/transit/gate-entry', action: true },
+        ],
+      },
+      {
+        icon: Warehouse, label: 'Warehouse & QC', path: '/warehouse',
+        children: [
+          { label: 'Dashboard',           path: '/warehouse' },
+          { label: 'QC Inspection',       path: '/warehouse/qc' },
+          { label: 'QC Rejections',       path: '/warehouse/qc-rejections' },
+          { label: 'Deduction Memos',     path: '/warehouse/deductions' },
+          { label: 'Inventory',           path: '/warehouse/inventory' },
+        ],
+      },
       {
         icon: TrendingUp, label: 'Sales', path: '/sales',
         children: [
-          { label: 'Customers',           path: '/sales/customers' },
-          { label: 'Sales Orders',        path: '/sales/orders',                action: true },
+          { label: 'Sales Order',         path: '/sales/customers' },
+          { label: 'Order Details',       path: '/sales/orders',                action: true },
           { label: 'Invoices',            path: '/sales/invoices' },
-          { label: 'Recurring Invoices',  path: '/sales/recurring-invoices' },
-          { label: 'Delivery Challans',   path: '/sales/delivery-challans' },
-          { label: 'Payments Received',   path: '/sales/payments-received' },
-          { label: 'Credit Notes',        path: '/sales/credit-notes' },
         ],
       },
-      { icon: Truck,        label: 'Logistics', path: '/logistics' },
-      { icon: Wallet,       label: 'Finance',   path: '/finance' },
-      { icon: FileBarChart, label: 'Reports',   path: '/reports' },
+      { icon: Truck,        label: 'Logistics',           path: '/logistics' },
+      { icon: Wallet,       label: 'Finance / Payments',  path: '/finance/process-payments' },
+      { icon: FileBarChart, label: 'Reports',             path: '/reports' },
     ],
   },
   {
@@ -495,6 +525,71 @@ const navigationConfig: NavGroup[] = [
     roles: ['admin'],
     items: [
       { icon: Shield, label: 'Admin Access', path: '/onboarding/admin-access' },
+    ],
+  },
+
+  // ── FF Operations Manager ────────────────────────────────────────────────────
+  {
+    title: 'Hub Management',
+    icon: Warehouse,
+    roles: ['ff_operations_manager'],
+    items: [
+      { icon: LayoutDashboard, label: 'All Hubs Overview',   path: '/admin/hubs' },
+      { icon: MapPin,          label: 'Palikarani Hub',      path: '/admin/hubs/palikarani' },
+      { icon: MapPin,          label: 'Vanagaram Hub',       path: '/admin/hubs/vanagaram' },
+      { icon: MapPin,          label: 'Hyderabad Hub',       path: '/admin/hubs/hyderabad' },
+    ],
+  },
+  {
+    title: 'FF Operations',
+    icon: Store,
+    roles: ['ff_operations_manager'],
+    items: [
+      { icon: LayoutDashboard, label: 'Home', path: '/ff-operations' },
+      {
+        icon: Package, label: 'Items', path: '/ff-operations/items',
+        children: [
+          { label: 'Items', path: '/ff-operations/items', action: true },
+        ],
+      },
+      {
+        icon: ShoppingCart, label: 'Purchase', path: '/purchase',
+        children: [
+          { label: 'Vendors',             path: '/purchase/vendors' },
+          { label: 'Purchase Orders',      path: '/purchase/auto-po' },
+          { label: '↳ Auto Bill',         path: '/purchase/auto-bill' },
+          { label: 'New Payment',         path: '/purchase/payment-form' },
+          { label: 'Payment Approvals',   path: '/purchase/payment-approvals' },
+        ],
+      },
+      {
+        icon: Truck, label: 'Transit / Gate', path: '/transit',
+        children: [
+          { label: 'Transit Dashboard',   path: '/transit' },
+          { label: 'Gate Entry',          path: '/transit/gate-entry', action: true },
+        ],
+      },
+      {
+        icon: Warehouse, label: 'Warehouse & QC', path: '/warehouse',
+        children: [
+          { label: 'Dashboard',           path: '/warehouse' },
+          { label: 'QC Inspection',       path: '/warehouse/qc' },
+          { label: 'QC Rejections',       path: '/warehouse/qc-rejections' },
+          { label: 'Deduction Memos',     path: '/warehouse/deductions' },
+          { label: 'Inventory',           path: '/warehouse/inventory' },
+        ],
+      },
+      {
+        icon: TrendingUp, label: 'Sales', path: '/sales',
+        children: [
+          { label: 'Sales Order',         path: '/sales/customers' },
+          { label: 'Order Details',       path: '/sales/orders',               action: true },
+          { label: 'Invoices',            path: '/sales/invoices' },
+        ],
+      },
+      { icon: Truck,        label: 'Logistics',           path: '/logistics' },
+      { icon: Wallet,       label: 'Finance / Payments',  path: '/finance/process-payments' },
+      { icon: FileBarChart, label: 'Reports',             path: '/reports' },
     ],
   },
 

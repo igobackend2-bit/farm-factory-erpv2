@@ -41,6 +41,9 @@ export const useLocationTracking = () => {
   useEffect(() => {
     if (!isAuthenticated || !user) return;
 
+    // Demo users (fake UUIDs) skip location tracking entirely
+    if (user.id?.startsWith('demo-')) return;
+
     const trackLocation = async () => {
       try {
         const position = await getCurrentPosition().catch((err) => {
