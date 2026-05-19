@@ -26,7 +26,7 @@ INSERT INTO public.hubs (name, location, city) VALUES
   ('Palikarani Hub', 'Palikarani',  'Chennai'),
   ('Vanagaram Hub',  'Vanagaram',   'Chennai'),
   ('Hyderabad Hub',  'Hyderabad',   'Hyderabad')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name) DO NOTHING;
 
 -- ── 2. SALARY BATCHES (NEW) ──────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.salary_batches (
