@@ -200,119 +200,137 @@ export default function BulkOrderPage() {
   const handleCsvImport = async () => {
     if (!csvPreview.length) return;
     setCsvImporting(true);
-    let created = 0;
-    let failed  = 0;
     const today = format(new Date(), 'yyyy-MM-dd');
     const isRealUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user?.id ?? '');
 
-    // Cache hub lookups
-    const hubCache: Record<string, string> = {};
-    const { data: allHubs } = await supabase.from('hubs').select('id, name');
-    for (const h of (allHubs ?? [])) hubCache[h.name.toLowerCase()] = h.id;
+    try {
+      // ── STEP 1: Fetch all hubs in one call ──────────────────────────────
+      const { data: allHubs } = await supabase.from('hubs').select('id, name');
+      const hubMap: Record<string, string> = {};
+      for (const h of (allHubs ?? [])) hubMap[h.name.toLowerCase()] = h.id;
 
-    // Cache customer lookups by phone
-    const customerCache: Record<string, string> = {};
+      // ── STEP 2: Get unique phones from CSV ──────────────────────────────
+      const uniquePhones = [...new Set(csvPreview.map((r: any) =>
+        String(r.phone ?? r.mobile ?? '').trim()).filter(Boolean))];
 
-    for (const row of csvPreview) {
-      try {
-        const phone     = String(row.phone ?? row.mobile ?? '').trim();
-        const hubName   = String(row.hub_name ?? '').trim();
-        const shift     = Number(row.shift) || null;
-        const hubId     = hubCache[hubName.toLowerCase()] ?? null;
+      // Fetch existing customers in ONE call
+      const { data: existingCustomers } = await supabase
+        .from('customers').select('id, phone').in('phone', uniquePhones);
+      const phoneToId: Record<string, string> = {};
+      for (const c of (existingCustomers ?? [])) if (c.phone) phoneToId[c.phone] = c.id;
 
-        // Find or create customer
-        let customerId = customerCache[phone];
-        if (!customerId) {
-          const { data: existing } = await supabase
-            .from('customers')
-            .select('id')
-            .eq('phone', phone)
-            .maybeSingle();
-          if (existing?.id) {
-            customerId = existing.id;
-          } else {
-            // Create new customer
-            const cName = String(row.customer_name ?? '').trim();
-            const { data: newCust } = await supabase.from('customers').insert({
-              customer_type: String(row.customer_type ?? 'shop').toLowerCase(),
-              shop_name:     cName,
-              name:          cName,
-              phone,
-              area:          String(row.area ?? '').trim() || null,
-              city:          String(row.city ?? '').trim() || null,
-              address:       String(row.address ?? '').trim() || null,
-              is_active:     true,
-            }).select('id').single();
-            customerId = newCust?.id ?? '';
-          }
-          if (customerId) customerCache[phone] = customerId;
-        }
-        if (!customerId) { failed++; continue; }
+      // ── STEP 3: Batch-insert only NEW customers ─────────────────────────
+      const newCustomerRows = csvPreview
+        .filter((r: any) => {
+          const p = String(r.phone ?? '').trim();
+          return p && !phoneToId[p];
+        })
+        // dedupe by phone within CSV itself
+        .filter((r: any, idx: number, arr: any[]) =>
+          arr.findIndex((x: any) => String(x.phone ?? '') === String(r.phone ?? '')) === idx)
+        .map((r: any) => {
+          const cName = String(r.customer_name ?? '').trim();
+          return {
+            customer_type: String(r.customer_type ?? 'shop').toLowerCase(),
+            shop_name: cName, name: cName,
+            phone: String(r.phone ?? '').trim(),
+            area:  String(r.area ?? '').trim() || null,
+            city:  String(r.city ?? '').trim() || null,
+            address: String(r.address ?? '').trim() || null,
+            is_active: true,
+          };
+        });
 
-        const qty        = Number(row.qty ?? 1);
-        const unitPrice  = Number(row.unit_price ?? 0);
-        const total      = qty * unitPrice;
-        const payMode    = String(row.payment_mode ?? 'cod').toLowerCase() as any;
-        const delivDate  = String(row.delivery_date ?? today).trim() || today;
+      if (newCustomerRows.length > 0) {
+        const { data: inserted } = await supabase
+          .from('customers').insert(newCustomerRows).select('id, phone');
+        for (const c of (inserted ?? [])) if (c.phone) phoneToId[c.phone] = c.id;
+      }
 
-        const { data: order, error: oErr } = await supabase.from('sales_orders').insert({
-          customer_id:   customerId,
-          customer_name: String(row.customer_name ?? '').trim(),
+      // ── STEP 4: Batch-insert ALL orders in one call ─────────────────────
+      const orderRows = csvPreview.map((r: any) => {
+        const phone    = String(r.phone ?? '').trim();
+        const hubName  = String(r.hub_name ?? '').trim();
+        const qty      = Number(r.qty ?? 1);
+        const price    = Number(r.unit_price ?? 0);
+        const total    = qty * price;
+        return {
+          customer_id:   phoneToId[phone] ?? null,
+          customer_name: String(r.customer_name ?? '').trim(),
           order_date:    today,
-          delivery_date: delivDate,
+          delivery_date: String(r.delivery_date ?? today).trim() || today,
           status:        'confirmed',
-          payment_mode:  payMode,
+          payment_mode:  String(r.payment_mode ?? 'cod').toLowerCase(),
           subtotal:      total,
           net_amount:    total,
           total_amount:  total,
-          notes:         String(row.notes ?? '').trim() || null,
-          hub_id:        hubId,
+          notes:         String(r.notes ?? '').trim() || null,
+          hub_id:        hubMap[hubName.toLowerCase()] ?? null,
           hub_name:      hubName || null,
-          shift,
+          shift:         Number(r.shift) || null,
           ...(isRealUuid ? { created_by: user!.id } : {}),
-        }).select().single();
-        if (oErr) { failed++; continue; }
+        };
+      }).filter(o => o.customer_id); // skip rows with no customer
 
-        await supabase.from('sales_order_items').insert({
+      const { data: createdOrders, error: oErr } = await supabase
+        .from('sales_orders').insert(orderRows).select('id, customer_id, customer_name, total_amount, payment_mode, notes');
+      if (oErr) throw oErr;
+
+      // ── STEP 5: Batch-insert ALL order items in one call ────────────────
+      const itemRows = (createdOrders ?? []).map((order, i) => {
+        const r = csvPreview[i] as any;
+        const qty   = Number(r.qty ?? 1);
+        const price = Number(r.unit_price ?? 0);
+        return {
           order_id:     order.id,
-          product_name: String(row.product_name ?? '').trim(),
-          quantity:     qty,
-          qty_kg:       qty,
-          quantity_kg:  qty,
-          unit:         String(row.unit ?? 'KG').trim().toUpperCase(),
-          unit_price:   unitPrice,
-          total_price:  total,
-          subtotal:     total,
-          qc_grade:     'A',
-          grade:        'A',
-        });
+          product_name: String(r.product_name ?? '').trim(),
+          quantity:     qty, qty_kg: qty, quantity_kg: qty,
+          unit:         String(r.unit ?? 'KG').toUpperCase(),
+          unit_price:   price,
+          total_price:  qty * price,
+          subtotal:     qty * price,
+          qc_grade:     'A', grade: 'A',
+        };
+      });
+      if (itemRows.length) await supabase.from('sales_order_items').insert(itemRows);
 
-        await createInvoiceForOrder({
-          orderId:       order.id,
-          customerId,
-          customerName:  String(row.customer_name ?? '').trim(),
-          customerPhone: phone || null,
-          subtotal:      total,
-          totalAmount:   total,
-          paymentMode:   payMode,
-          notes:         String(row.notes ?? '').trim() || null,
-        });
-
-        created++;
-      } catch (err: any) {
-        console.warn('CSV row failed:', err?.message, row);
-        failed++;
+      // ── STEP 6: Batch-insert ALL invoices in one call ───────────────────
+      const invoiceRows = (createdOrders ?? []).map((order, i) => {
+        const r      = csvPreview[i] as any;
+        const phone  = String(r.phone ?? '').trim();
+        const suffix = order.id.replace(/-/g, '').slice(0, 6).toUpperCase();
+        return {
+          invoice_number:   `INV-${format(new Date(), 'yyyyMMdd')}-${suffix}`,
+          order_id:         order.id,
+          customer_id:      order.customer_id,
+          customer_name:    order.customer_name,
+          customer_phone:   phone || null,
+          invoice_date:     today,
+          due_date:         today,
+          subtotal:         Number(order.total_amount),
+          discount_amount:  0,
+          tax_amount:       0,
+          total_amount:     Number(order.total_amount),
+          payment_mode:     order.payment_mode ?? 'cod',
+          status:           'unpaid',
+          notes:            order.notes ?? null,
+        };
+      });
+      if (invoiceRows.length) {
+        await supabase.from('invoices').insert(invoiceRows);
       }
-    }
 
-    setCsvImporting(false);
-    setShowCsvPanel(false);
-    setCsvPreview([]);
-    if (created > 0) {
-      toast.success(`✅ ${created} orders imported from CSV`);
-      setDone({ count: created });
+      const count = createdOrders?.length ?? 0;
+      setCsvImporting(false);
+      setShowCsvPanel(false);
+      setCsvPreview([]);
+      toast.success(`✅ ${count} orders imported!`);
+      setDone({ count });
+    } catch (err: any) {
+      setCsvImporting(false);
+      toast.error(`Import failed: ${err?.message ?? 'Unknown error'}`);
+      console.error('CSV import error:', err);
     }
-    if (failed > 0) toast.error(`${failed} rows failed — check phone numbers`);
   };
 
   /* Success screen */
