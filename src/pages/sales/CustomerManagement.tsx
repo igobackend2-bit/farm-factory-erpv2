@@ -7,7 +7,7 @@ import {
   Phone, MapPin, Plus, Edit2, X, Check, Search, Users,
   AlertTriangle, Upload, Store, User, ChevronDown, RefreshCw,
   FileText, CheckCircle2, ShoppingCart, LayoutList, Loader2,
-  Package, Trash2, ShoppingBag,
+  Package, Trash2, ShoppingBag, Building2, Clock, Sun, Moon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -398,6 +398,26 @@ function CustomerFormModal({
   const [productQuery, setProductQuery] = useState('');
   const [payMode, setPayMode]   = useState<'cod' | 'credit' | 'upi'>('cod');
 
+  /* Hub & shift */
+  const [selectedHubId, setSelectedHubId]     = useState('');
+  const [selectedHubName, setSelectedHubName] = useState('');
+
+  /* Current shift detection */
+  const _now = new Date();
+  const _mins = _now.getHours() * 60 + _now.getMinutes();
+  const currentShift: 1 | 2 | null =
+    _mins >= 600 && _mins < 1170 ? 1 :
+    _mins >= 1170 && _mins <= 1380 ? 2 : null;
+
+  /* Hubs from Supabase */
+  const { data: hubs = [] } = useQuery({
+    queryKey: ['hubs-active-modal'],
+    queryFn: async () => {
+      const { data } = await supabase.from('hubs').select('id, name, location, city').eq('is_active', true).order('name');
+      return data ?? [];
+    },
+  });
+
   /* product search — merges Supabase live data with demo grocery catalogue */
   const { data: productResults = [] } = useQuery({
     queryKey: ['modal-product-search', productQuery],
@@ -578,6 +598,9 @@ function CustomerFormModal({
           subtotal:      orderTotal,
           net_amount:    orderTotal,
           total_amount:  orderTotal,
+          hub_id:        selectedHubId || null,
+          hub_name:      selectedHubName || null,
+          shift:         currentShift,
           ...(isRealUuid ? { created_by: user!.id } : {}),
         }).select().single();
         if (oErr) throw oErr;
@@ -755,6 +778,53 @@ function CustomerFormModal({
               <div><label className={labelCls}>Address</label><input type="text" value={(form as IndividualForm).address} onChange={e => setF('address', e.target.value)} className={inputCls} placeholder="Full address" /></div>
             </div>
           )}
+
+          {/* ════════════════════════════════════════════
+              HUB & SHIFT SECTION
+          ════════════════════════════════════════════ */}
+          <div className="border-t border-dashed border-gray-200 pt-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-purple-500" />
+              <span className="text-sm font-bold text-slate-700">Delivery Hub</span>
+              <span className="text-xs text-slate-400">(required for order & PO generation)</span>
+            </div>
+
+            {/* Shift indicator */}
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold ${
+              currentShift === 1 ? 'bg-blue-50 border border-blue-200 text-blue-700' :
+              currentShift === 2 ? 'bg-orange-50 border border-orange-200 text-orange-700' :
+              'bg-slate-50 border border-slate-200 text-slate-500'
+            }`}>
+              <Clock className="h-3.5 w-3.5" />
+              {currentShift === 1 ? '🌅 Shift 1 — PO will go to Operations Manager for approval' :
+               currentShift === 2 ? '🌙 Shift 2 — PO will go directly to Purchase Executive' :
+               '⏰ Outside order hours (10 AM – 11 PM)'}
+            </div>
+
+            {/* Hub cards */}
+            <div className="grid grid-cols-3 gap-2">
+              {(hubs as any[]).map((hub: any) => (
+                <button
+                  key={hub.id}
+                  type="button"
+                  onClick={() => { setSelectedHubId(hub.id); setSelectedHubName(hub.name); }}
+                  className={`rounded-xl border-2 p-2.5 text-left transition-all ${
+                    selectedHubId === hub.id
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 hover:border-purple-300 bg-white'
+                  }`}
+                >
+                  <p className={`text-xs font-bold ${selectedHubId === hub.id ? 'text-purple-700' : 'text-slate-700'}`}>{hub.name}</p>
+                  <p className="text-[10px] text-slate-400">{hub.location}</p>
+                </button>
+              ))}
+            </div>
+            {!selectedHubId && (
+              <p className="text-[10px] text-amber-600 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" /> Select a hub to include this order in the shift PO
+              </p>
+            )}
+          </div>
 
           {/* ════════════════════════════════════════════
               ORDER ITEMS SECTION
