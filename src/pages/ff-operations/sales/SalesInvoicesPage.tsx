@@ -8,8 +8,9 @@ import {
   FileText, Search, Eye, Printer, X, CheckCircle2,
   Clock, XCircle, IndianRupee, Phone, MapPin,
   ArrowLeft, Download, MessageCircle, Loader2,
-  Package, ChevronRight, Building2,
+  Package, ChevronRight, Building2, RefreshCw, Zap,
 } from 'lucide-react';
+import { backfillMissingInvoices } from '@/lib/invoiceHelper';
 
 /* ─── Types ─────────────────────────────────────────────────────────────────── */
 interface Invoice {
@@ -455,6 +456,8 @@ export default function SalesInvoicesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [needsSetup, setNeedsSetup]     = useState(false);
+  const [syncing, setSyncing]           = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: invoices = [], isLoading } = useQuery<Invoice[]>({
     queryKey: ['invoices', search, statusFilter],
@@ -494,6 +497,24 @@ export default function SalesInvoicesPage() {
   const totalUnpaid = invoices.filter(i => i.status === 'unpaid').reduce((s, i) => s + i.total_amount, 0);
   const totalPaid   = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + i.total_amount, 0);
 
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const { created, failed } = await backfillMissingInvoices();
+      if (created > 0) {
+        toast.success(`✅ ${created} missing invoice${created > 1 ? 's' : ''} generated`);
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      } else {
+        toast.success('All orders already have invoices');
+      }
+      if (failed > 0) toast.error(`${failed} invoice(s) failed — check console`);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (needsSetup) return <SetupRequired />;
 
   if (selectedInvoice) {
@@ -508,11 +529,21 @@ export default function SalesInvoicesPage() {
           <h1 className="text-2xl font-bold text-slate-800">Invoices</h1>
           <p className="text-sm text-slate-500 mt-0.5">Auto-generated for every order</p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span className="bg-amber-50 text-amber-700 font-bold px-3 py-1.5 rounded-lg border border-amber-200">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 disabled:opacity-50 transition-colors"
+            title="Generate invoices for any orders that are missing one"
+          >
+            {syncing
+              ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Syncing…</>
+              : <><Zap className="h-3.5 w-3.5" /> Sync Missing</>}
+          </button>
+          <span className="bg-amber-50 text-amber-700 font-bold px-3 py-1.5 rounded-lg border border-amber-200 text-xs">
             Unpaid ₹{totalUnpaid.toLocaleString('en-IN')}
           </span>
-          <span className="bg-green-50 text-green-700 font-bold px-3 py-1.5 rounded-lg border border-green-200">
+          <span className="bg-green-50 text-green-700 font-bold px-3 py-1.5 rounded-lg border border-green-200 text-xs">
             Paid ₹{totalPaid.toLocaleString('en-IN')}
           </span>
         </div>
