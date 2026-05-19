@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -6,10 +6,12 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { createInvoiceForOrder } from '@/lib/invoiceHelper';
+import Papa from 'papaparse';
 import {
   Plus, Trash2, RefreshCw, CheckCircle2, ShoppingBag,
   Phone, MapPin, User, Store, Package, CalendarDays,
   FileText, AlertCircle, IndianRupee, ChevronDown,
+  Upload, Download, X, Building2,
 } from 'lucide-react';
 
 /* ─── Types ───────────────────────────────────────────────────────────────── */
@@ -67,6 +69,10 @@ export default function BulkOrderPage() {
   const [done, setDone]         = useState<{ count: number } | null>(null);
   const [customerQuery, setCustomerQuery] = useState('');
   const [productQuery, setProductQuery]   = useState('');
+  const [csvImporting, setCsvImporting]   = useState(false);
+  const [csvPreview, setCsvPreview]       = useState<any[]>([]);
+  const [showCsvPanel, setShowCsvPanel]   = useState(false);
+  const csvRef = useRef<HTMLInputElement>(null);
 
   /* Customer search */
   const { data: customers = [] } = useQuery({
@@ -178,6 +184,137 @@ export default function BulkOrderPage() {
     }
   };
 
+  /* ── CSV Import ────────────────────────────────────────────────────────── */
+  const handleCsvFile = (file: File) => {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (h: string) => h.trim().toLowerCase().replace(/\s+/g, '_'),
+      complete: (result: any) => {
+        setCsvPreview(result.data);
+        setShowCsvPanel(true);
+      },
+    });
+  };
+
+  const handleCsvImport = async () => {
+    if (!csvPreview.length) return;
+    setCsvImporting(true);
+    let created = 0;
+    let failed  = 0;
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const isRealUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user?.id ?? '');
+
+    // Cache hub lookups
+    const hubCache: Record<string, string> = {};
+    const { data: allHubs } = await supabase.from('hubs').select('id, name');
+    for (const h of (allHubs ?? [])) hubCache[h.name.toLowerCase()] = h.id;
+
+    // Cache customer lookups by phone
+    const customerCache: Record<string, string> = {};
+
+    for (const row of csvPreview) {
+      try {
+        const phone     = String(row.phone ?? row.mobile ?? '').trim();
+        const hubName   = String(row.hub_name ?? '').trim();
+        const shift     = Number(row.shift) || null;
+        const hubId     = hubCache[hubName.toLowerCase()] ?? null;
+
+        // Find or create customer
+        let customerId = customerCache[phone];
+        if (!customerId) {
+          const { data: existing } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('phone', phone)
+            .maybeSingle();
+          if (existing?.id) {
+            customerId = existing.id;
+          } else {
+            // Create new customer
+            const cName = String(row.customer_name ?? '').trim();
+            const { data: newCust } = await supabase.from('customers').insert({
+              customer_type: String(row.customer_type ?? 'shop').toLowerCase(),
+              shop_name:     cName,
+              name:          cName,
+              phone,
+              area:          String(row.area ?? '').trim() || null,
+              city:          String(row.city ?? '').trim() || null,
+              address:       String(row.address ?? '').trim() || null,
+              is_active:     true,
+            }).select('id').single();
+            customerId = newCust?.id ?? '';
+          }
+          if (customerId) customerCache[phone] = customerId;
+        }
+        if (!customerId) { failed++; continue; }
+
+        const qty        = Number(row.qty ?? 1);
+        const unitPrice  = Number(row.unit_price ?? 0);
+        const total      = qty * unitPrice;
+        const payMode    = String(row.payment_mode ?? 'cod').toLowerCase() as any;
+        const delivDate  = String(row.delivery_date ?? today).trim() || today;
+
+        const { data: order, error: oErr } = await supabase.from('sales_orders').insert({
+          customer_id:   customerId,
+          customer_name: String(row.customer_name ?? '').trim(),
+          order_date:    today,
+          delivery_date: delivDate,
+          status:        'confirmed',
+          payment_mode:  payMode,
+          subtotal:      total,
+          net_amount:    total,
+          total_amount:  total,
+          notes:         String(row.notes ?? '').trim() || null,
+          hub_id:        hubId,
+          hub_name:      hubName || null,
+          shift,
+          ...(isRealUuid ? { created_by: user!.id } : {}),
+        }).select().single();
+        if (oErr) { failed++; continue; }
+
+        await supabase.from('sales_order_items').insert({
+          order_id:     order.id,
+          product_name: String(row.product_name ?? '').trim(),
+          quantity:     qty,
+          qty_kg:       qty,
+          quantity_kg:  qty,
+          unit:         String(row.unit ?? 'KG').trim().toUpperCase(),
+          unit_price:   unitPrice,
+          total_price:  total,
+          subtotal:     total,
+          qc_grade:     'A',
+          grade:        'A',
+        });
+
+        await createInvoiceForOrder({
+          orderId:       order.id,
+          customerId,
+          customerName:  String(row.customer_name ?? '').trim(),
+          customerPhone: phone || null,
+          subtotal:      total,
+          totalAmount:   total,
+          paymentMode:   payMode,
+          notes:         String(row.notes ?? '').trim() || null,
+        });
+
+        created++;
+      } catch (err: any) {
+        console.warn('CSV row failed:', err?.message, row);
+        failed++;
+      }
+    }
+
+    setCsvImporting(false);
+    setShowCsvPanel(false);
+    setCsvPreview([]);
+    if (created > 0) {
+      toast.success(`✅ ${created} orders imported from CSV`);
+      setDone({ count: created });
+    }
+    if (failed > 0) toast.error(`${failed} rows failed — check phone numbers`);
+  };
+
   /* Success screen */
   if (done) {
     return (
@@ -204,22 +341,95 @@ export default function BulkOrderPage() {
   return (
     <div className="space-y-4 pb-12 pt-2">
 
+      {/* CSV file input (hidden) */}
+      <input ref={csvRef} type="file" accept=".csv" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleCsvFile(f); e.target.value = ''; }} />
+
       {/* Header bar */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-slate-800">Bulk Order Entry</h2>
-          <p className="text-xs text-slate-400">One card per order — fill customer details, items &amp; order info</p>
+          <p className="text-xs text-slate-400">One card per order — or import from CSV</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg font-medium">
             {validRows.length} ready · {invalidRows.length} incomplete
           </span>
+          <button onClick={() => csvRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700">
+            <Upload className="h-3.5 w-3.5" /> Import CSV
+          </button>
           <button onClick={addRow}
             className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700">
             <Plus className="h-3.5 w-3.5" /> Add Order
           </button>
         </div>
       </div>
+
+      {/* CSV Preview Panel */}
+      {showCsvPanel && csvPreview.length > 0 && (
+        <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 bg-purple-50 border-b border-purple-100">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-purple-600" />
+              <p className="font-bold text-purple-800 text-sm">{csvPreview.length} orders ready to import</p>
+            </div>
+            <button onClick={() => { setShowCsvPanel(false); setCsvPreview([]); }}
+              className="p-1 rounded-lg hover:bg-purple-100">
+              <X className="h-4 w-4 text-purple-500" />
+            </button>
+          </div>
+          <div className="overflow-x-auto max-h-56">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 text-gray-500 sticky top-0">
+                <tr>
+                  {['customer_name','phone','hub_name','shift','product_name','qty','unit','unit_price','payment_mode','delivery_date'].map(h => (
+                    <th key={h} className="px-3 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {csvPreview.slice(0, 10).map((r, i) => (
+                  <tr key={i} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 font-semibold text-gray-800 whitespace-nowrap">{r.customer_name}</td>
+                    <td className="px-3 py-2 text-gray-500">{r.phone}</td>
+                    <td className="px-3 py-2">
+                      <span className="flex items-center gap-1 text-purple-600 font-semibold whitespace-nowrap">
+                        <Building2 className="h-3 w-3" />{r.hub_name}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${r.shift === '1' || r.shift === 1 ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                        S{r.shift}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 font-semibold text-gray-800">{r.product_name}</td>
+                    <td className="px-3 py-2 text-center">{r.qty}</td>
+                    <td className="px-3 py-2">{r.unit}</td>
+                    <td className="px-3 py-2 font-semibold">₹{r.unit_price}</td>
+                    <td className="px-3 py-2 uppercase text-[10px] font-bold text-gray-500">{r.payment_mode}</td>
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{r.delivery_date}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {csvPreview.length > 10 && (
+            <p className="text-center text-xs text-gray-400 py-2 border-t">…and {csvPreview.length - 10} more rows</p>
+          )}
+          <div className="flex items-center gap-3 px-5 py-4 border-t bg-gray-50">
+            <button onClick={handleCsvImport} disabled={csvImporting}
+              className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700 disabled:opacity-50">
+              {csvImporting
+                ? <><RefreshCw className="h-4 w-4 animate-spin" /> Importing…</>
+                : <><CheckCircle2 className="h-4 w-4" /> Import {csvPreview.length} Orders</>}
+            </button>
+            <p className="text-xs text-gray-500">
+              New customers will be auto-created. Existing customers matched by phone number.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Order cards */}
       <div className="space-y-3">
