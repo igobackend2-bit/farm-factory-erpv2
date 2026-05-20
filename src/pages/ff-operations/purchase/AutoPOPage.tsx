@@ -842,6 +842,16 @@ export default function AutoPOPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo]     = useState('');
 
+  // ── Bought quantities map (re-read from localStorage on demand) ──
+  const [boughtMap, setBoughtMap] = useState<Record<string, number>>({});
+
+  const refreshBoughtMap = useCallback(() => {
+    const agg = aggregateProducts(MOCK_CUSTOMER_ORDERS);
+    const map: Record<string, number> = {};
+    for (const p of agg) map[p.productName] = getBoughtQty(p.productName);
+    setBoughtMap(map);
+  }, []);
+
   // Modals
   const [createPOOpen, setCreatePOOpen] = useState(false);
   const [prefillItems, setPrefillItems] = useState<Array<{ product: string; qty: number; unit: string; rate: number }>>([]);
@@ -857,9 +867,27 @@ export default function AutoPOPage() {
     const all = getStoredPOs();
     setPOs(all.filter(p => p.status !== 'pending_approval'));
     setPendingPOs(getPendingApprovalPOs());
-  }, [orders]);
+    refreshBoughtMap();
+  }, [orders, refreshBoughtMap]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Re-read bought quantities when window regains focus (user returns from Buy page)
+  useEffect(() => {
+    const onFocus    = () => refreshBoughtMap();
+    const onStorage  = () => refreshBoughtMap();
+    window.addEventListener('focus',   onFocus);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('focus',   onFocus);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [refreshBoughtMap]);
+
+  // Re-read when switching to summary tab
+  useEffect(() => {
+    if (tab === 'summary') refreshBoughtMap();
+  }, [tab, refreshBoughtMap]);
 
   // Excel export (customer-order level detail)
   const exportExcel = useCallback(() => {
@@ -1108,7 +1136,7 @@ export default function AutoPOPage() {
                       <td className="px-4 py-3.5 text-right font-bold text-gray-900">₹{fmt(p.totalValue)}</td>
                       <td className="px-4 py-3.5 text-center">
                         {(() => {
-                          const bought = getBoughtQty(p.productName);
+                          const bought = boughtMap[p.productName] ?? 0;
                           const balance = p.totalQty - bought;
                           if (bought === 0) return <StatusBadge status="Pending" />;
                           if (balance > 0) return (
@@ -1121,7 +1149,7 @@ export default function AutoPOPage() {
                         })()}
                       </td>
                       <td className="px-4 py-3.5 text-center">
-                        {getBoughtQty(p.productName) >= p.totalQty ? (
+                        {(boughtMap[p.productName] ?? 0) >= p.totalQty ? (
                           <span className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded-lg mx-auto w-fit">
                             <CheckCircle2 size={13} /> Done
                           </span>
