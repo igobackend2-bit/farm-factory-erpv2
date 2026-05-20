@@ -108,6 +108,7 @@ const navigationConfig: NavGroup[] = [
       'nsm', 'datateam', 'data_team', 'data', 'boi', 'gmo', 'smo', 'gm',
       'accounts', 'farmmanager', 'bd_data', 'rsh', 'RSH', 'site_visit_farm_manager',
       'cafe_manager', 'palm_cafe_manager', 'ff_operations_manager',
+      'bde', 'field_executive', 'back_office', 'tele_caller', 'shift_employee', 'driver',
     ],
     items: [
       { icon: Home,          label: 'My Dashboard',          path: '/employee-dashboard' },
