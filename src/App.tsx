@@ -348,6 +348,7 @@ const ALL_STAFF_ROLES = [
   // Farmers Factory
   'purchase_manager', 'warehouse_manager', 'qc_manager', 'field_executive',
   'tele_caller', 'driver', 'back_office', 'shift_employee', 'ff_operations_manager',
+  'bde',
 ];
 
 // Operations + management roles (no pure field/driver roles)
@@ -355,7 +356,7 @@ const OPS_ROLES = [
   'ceo', 'director', 'Director', 'gm', 'gmo', 'smo', 'boi', 'nsm', 'admin',
   'hr', 'accounts', 'back_office',
   'purchase_manager', 'purchase_head', 'warehouse_manager', 'qc_manager',
-  'field_executive', 'tele_caller',
+  'field_executive', 'tele_caller', 'bde',
   'ff_operations_manager',
 ];
 
@@ -825,13 +826,13 @@ const AppRoutes = () => {
       <Route path="/purchase/vendor-credits"     element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'purchase_manager', 'purchase_head', 'ff_operations_manager']}><VendorCreditsPage /></ProtectedRoute>} />
 
       {/* FF Operations — Sales sub-pages */}
-      <Route path="/sales/customers"             element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><SalesCustomersPage /></ProtectedRoute>} />
-      <Route path="/sales/orders"                element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><SalesOrdersPage /></ProtectedRoute>} />
-      <Route path="/sales/invoices"              element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><SalesInvoicesPage /></ProtectedRoute>} />
-      <Route path="/sales/recurring-invoices"    element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><RecurringInvoicesPage /></ProtectedRoute>} />
-      <Route path="/sales/delivery-challans"     element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><DeliveryChallansPage /></ProtectedRoute>} />
-      <Route path="/sales/payments-received"     element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><PaymentsReceivedPage /></ProtectedRoute>} />
-      <Route path="/sales/credit-notes"          element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'ff_operations_manager']}><CreditNotesPage /></ProtectedRoute>} />
+      <Route path="/sales/customers"             element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'bde', 'ff_operations_manager']}><SalesCustomersPage /></ProtectedRoute>} />
+      <Route path="/sales/orders"                element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'bde', 'ff_operations_manager']}><SalesOrdersPage /></ProtectedRoute>} />
+      <Route path="/sales/invoices"              element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'bde', 'ff_operations_manager']}><SalesInvoicesPage /></ProtectedRoute>} />
+      <Route path="/sales/recurring-invoices"    element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'bde', 'ff_operations_manager']}><RecurringInvoicesPage /></ProtectedRoute>} />
+      <Route path="/sales/delivery-challans"     element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'bde', 'ff_operations_manager']}><DeliveryChallansPage /></ProtectedRoute>} />
+      <Route path="/sales/payments-received"     element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'bde', 'ff_operations_manager']}><PaymentsReceivedPage /></ProtectedRoute>} />
+      <Route path="/sales/credit-notes"          element={<ProtectedRoute allowedRoles={['admin', 'back_office', 'field_executive', 'bde', 'ff_operations_manager']}><CreditNotesPage /></ProtectedRoute>} />
 
       {/* Finance Module (FF ERP) */}
       <Route path="/finance" element={<ProtectedRoute allowedRoles={OPS_ROLES}><FinanceDashboard /></ProtectedRoute>} />

@@ -803,7 +803,7 @@ const navigationConfig: NavGroup[] = [
   {
     title: 'Sales',
     icon: TrendingUp,
-    roles: ['field_executive', 'back_office'],
+    roles: ['field_executive', 'bde', 'back_office'],
     items: [
       { icon: LayoutDashboard, label: 'Sales Dashboard', path: '/sales' },
       { icon: Plus,            label: 'New Order',        path: '/sales/new-order' },
