@@ -833,7 +833,44 @@ function HubPOPanel() {
 
 export default function AutoPOPage() {
   const navigate = useNavigate();
-  const [orders] = useState<CustomerOrder[]>(MOCK_CUSTOMER_ORDERS);
+  const qc = useQueryClient();
+
+  // ── Load REAL orders from Supabase ──────────────────────────────────────────
+  const { data: orders = [], isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
+    queryKey: ['auto-po-real-orders'],
+    queryFn: async (): Promise<CustomerOrder[]> => {
+      const { data, error } = await supabase
+        .from('sales_orders')
+        .select(`
+          id, customer_name, order_date, delivery_date, status,
+          customers(shop_name, first_name, last_name, phone, mobile, address),
+          sales_order_items(product_name, quantity, unit, unit_price)
+        `)
+        .in('status', ['confirmed', 'pending', 'processing'])
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((o: any): CustomerOrder => ({
+        id: o.id,
+        shopName: o.customers?.shop_name || o.customer_name || 'Shop',
+        customerName: o.customer_name || '',
+        address: o.customers?.address || '',
+        phone: o.customers?.phone || o.customers?.mobile || '',
+        products: (o.sales_order_items || [])
+          .filter((item: any) => item.product_name)
+          .map((item: any) => ({
+            name: String(item.product_name).trim(),
+            qty:  Number(item.quantity) || 0,
+            unit: item.unit || 'kg',
+            price: Number(item.unit_price) || 0,
+          })),
+        orderDate:    o.order_date    || '',
+        deliveryDate: o.delivery_date || '',
+        status:       o.status        || 'Pending',
+      }));
+    },
+    staleTime: 60_000, // re-fetch at most once per minute
+  });
+
   const [aggregated, setAggregated] = useState<AggregatedProduct[]>([]);
   const [pos, setPOs] = useState<StoredPO[]>([]);
   const [pendingPOs, setPendingPOs] = useState<StoredPO[]>([]);
@@ -845,8 +882,7 @@ export default function AutoPOPage() {
   // ── Bought quantities map (re-read from localStorage on demand) ──
   const [boughtMap, setBoughtMap] = useState<Record<string, number>>({});
 
-  const refreshBoughtMap = useCallback(() => {
-    const agg = aggregateProducts(MOCK_CUSTOMER_ORDERS);
+  const refreshBoughtMap = useCallback((agg: AggregatedProduct[]) => {
     const map: Record<string, number> = {};
     for (const p of agg) map[p.productName] = getBoughtQty(p.productName);
     setBoughtMap(map);
@@ -862,32 +898,41 @@ export default function AutoPOPage() {
   const [rejectPO, setRejectPO] = useState<StoredPO | null>(null);
   const [viewOrders, setViewOrders] = useState<string | null>(null);
 
-  const refresh = useCallback(() => {
-    setAggregated(aggregateProducts(orders));
+  // Re-aggregate whenever real orders load/change
+  useEffect(() => {
+    if (!orders.length) return;
+    const agg = aggregateProducts(orders);
+    setAggregated(agg);
+    refreshBoughtMap(agg);
     const all = getStoredPOs();
     setPOs(all.filter(p => p.status !== 'pending_approval'));
     setPendingPOs(getPendingApprovalPOs());
-    refreshBoughtMap();
   }, [orders, refreshBoughtMap]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  const refresh = useCallback(() => {
+    refetchOrders();
+    const all = getStoredPOs();
+    setPOs(all.filter(p => p.status !== 'pending_approval'));
+    setPendingPOs(getPendingApprovalPOs());
+    refreshBoughtMap(aggregated);
+  }, [refetchOrders, aggregated, refreshBoughtMap]);
 
   // Re-read bought quantities when window regains focus (user returns from Buy page)
   useEffect(() => {
-    const onFocus    = () => refreshBoughtMap();
-    const onStorage  = () => refreshBoughtMap();
+    const onFocus   = () => refreshBoughtMap(aggregated);
+    const onStorage = () => refreshBoughtMap(aggregated);
     window.addEventListener('focus',   onFocus);
     window.addEventListener('storage', onStorage);
     return () => {
       window.removeEventListener('focus',   onFocus);
       window.removeEventListener('storage', onStorage);
     };
-  }, [refreshBoughtMap]);
+  }, [aggregated, refreshBoughtMap]);
 
   // Re-read when switching to summary tab
   useEffect(() => {
-    if (tab === 'summary') refreshBoughtMap();
-  }, [tab, refreshBoughtMap]);
+    if (tab === 'summary') refreshBoughtMap(aggregated);
+  }, [tab, aggregated, refreshBoughtMap]);
 
   // Excel export (customer-order level detail)
   const exportExcel = useCallback(() => {
@@ -906,7 +951,6 @@ export default function AutoPOPage() {
       'Status': order.status,
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
-    // Column widths
     ws['!cols'] = [
       { wch: 18 }, { wch: 18 }, { wch: 28 }, { wch: 14 },
       { wch: 25 }, { wch: 35 }, { wch: 14 }, { wch: 14 },
@@ -920,12 +964,10 @@ export default function AutoPOPage() {
 
   const openCreatePO = (product?: AggregatedProduct) => {
     if (product) {
-      // Use cost price (what we pay vendor) — NOT selling price
       const costRate = PRODUCT_COST_MAP[product.productName] ?? Math.round(product.avgPrice * 0.75);
       setPrefillItems([{ product: product.productName, qty: product.totalQty, unit: product.unit, rate: costRate }]);
       setLinkedOrders(orders.filter(o => o.products.some(p => p.name === product.productName)));
     } else {
-      // All aggregated items with cost price
       setPrefillItems(aggregated.map(p => ({
         product: p.productName,
         qty: p.totalQty,
@@ -984,11 +1026,11 @@ export default function AutoPOPage() {
     return matchSearch && matchFrom && matchTo;
   });
 
-  const totalOrders = orders.length;
+  const totalOrders   = orders.length;
   const totalProducts = aggregated.length;
-  const totalValue = aggregated.reduce((s, p) => s + p.totalValue, 0);
-  const poCount = pos.length;
-  const pendingCount = pendingPOs.length;
+  const totalValue    = aggregated.reduce((s, p) => s + p.totalValue, 0);
+  const poCount       = pos.length;
+  const pendingCount  = pendingPOs.length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1106,7 +1148,15 @@ export default function AutoPOPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {filteredAggregated.map(p => (
+                  {ordersLoading && (
+                    <tr><td colSpan={9} className="px-4 py-10 text-center text-sm text-gray-400">
+                      <RefreshCw size={18} className="inline animate-spin mr-2" />Loading live orders from Supabase…
+                    </td></tr>
+                  )}
+                  {!ordersLoading && filteredAggregated.length === 0 && (
+                    <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400">No products found in confirmed orders.</td></tr>
+                  )}
+                  {!ordersLoading && filteredAggregated.map(p => (
                     <tr key={p.productName} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2.5">
@@ -1163,9 +1213,7 @@ export default function AutoPOPage() {
                       </td>
                     </tr>
                   ))}
-                  {filteredAggregated.length === 0 && (
-                    <tr><td colSpan={10} className="px-4 py-12 text-center text-gray-400">No products found.</td></tr>
-                  )}
+                  {/* empty state handled above */}
                 </tbody>
               </table>
             </div>
