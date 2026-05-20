@@ -6,8 +6,15 @@
 --  Creates 8 sales team members (field_executive role)
 --  with login credentials for the Sales module.
 --
---  Default password for all: FF@2026
---  (Users should change on first login)
+--  Passwords (name-based):
+--  Priyanka        → Priya@2026
+--  Indhurekha      → Indhu@2026
+--  Arun            → Arun@2026
+--  Akash           → Akash@2026
+--  Parasa Jagadeesh→ Parasa@2026
+--  Yazhini         → Yazhi@2026
+--  Amirthalingam S → Amirth@2026
+--  Anusiya A       → Anusi@2026
 -- ============================================================
 
 DO $$
@@ -15,7 +22,7 @@ DECLARE
   uid uuid;
 BEGIN
 
-  -- ── 1. PRIYANKA ────────────────────────────────────────────
+  -- ── 1. PRIYANKA  (password: Priya@2026) ───────────────────
   uid := gen_random_uuid();
   INSERT INTO auth.users (
     id, instance_id, email, encrypted_password,
@@ -26,7 +33,7 @@ BEGIN
     uid,
     '00000000-0000-0000-0000-000000000000',
     'priyanka@farmersfactory.in',
-    crypt('FF@2026', gen_salt('bf')),
+    crypt('Priya@2026', gen_salt('bf')),
     now(),
     '{"provider":"email","providers":["email"]}',
     '{"name":"Priyanka"}',
@@ -45,7 +52,7 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
   END IF;
 
-  -- ── 2. INDHUREKHA ──────────────────────────────────────────
+  -- ── 2. INDHUREKHA  (password: Indhu@2026) ─────────────────
   uid := gen_random_uuid();
   INSERT INTO auth.users (
     id, instance_id, email, encrypted_password,
@@ -56,7 +63,7 @@ BEGIN
     uid,
     '00000000-0000-0000-0000-000000000000',
     'indhurekha@farmersfactory.in',
-    crypt('FF@2026', gen_salt('bf')),
+    crypt('Indhu@2026', gen_salt('bf')),
     now(),
     '{"provider":"email","providers":["email"]}',
     '{"name":"Indhurekha"}',
@@ -75,7 +82,7 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
   END IF;
 
-  -- ── 3. ARUN ────────────────────────────────────────────────
+  -- ── 3. ARUN  (password: Arun@2026) ────────────────────────
   uid := gen_random_uuid();
   INSERT INTO auth.users (
     id, instance_id, email, encrypted_password,
@@ -86,7 +93,7 @@ BEGIN
     uid,
     '00000000-0000-0000-0000-000000000000',
     'arun@farmersfactory.in',
-    crypt('FF@2026', gen_salt('bf')),
+    crypt('Arun@2026', gen_salt('bf')),
     now(),
     '{"provider":"email","providers":["email"]}',
     '{"name":"Arun"}',
@@ -105,7 +112,7 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
   END IF;
 
-  -- ── 4. AKASH ───────────────────────────────────────────────
+  -- ── 4. AKASH  (password: Akash@2026) ──────────────────────
   uid := gen_random_uuid();
   INSERT INTO auth.users (
     id, instance_id, email, encrypted_password,
@@ -116,7 +123,7 @@ BEGIN
     uid,
     '00000000-0000-0000-0000-000000000000',
     'akash@farmersfactory.in',
-    crypt('FF@2026', gen_salt('bf')),
+    crypt('Akash@2026', gen_salt('bf')),
     now(),
     '{"provider":"email","providers":["email"]}',
     '{"name":"Akash"}',
@@ -135,7 +142,7 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
   END IF;
 
-  -- ── 5. PARASA JAGADEESH ────────────────────────────────────
+  -- ── 5. PARASA JAGADEESH  (password: Parasa@2026) ──────────
   uid := gen_random_uuid();
   INSERT INTO auth.users (
     id, instance_id, email, encrypted_password,
@@ -146,7 +153,7 @@ BEGIN
     uid,
     '00000000-0000-0000-0000-000000000000',
     'parasajagadeesh@farmersfactory.in',
-    crypt('FF@2026', gen_salt('bf')),
+    crypt('Parasa@2026', gen_salt('bf')),
     now(),
     '{"provider":"email","providers":["email"]}',
     '{"name":"Parasa Jagadeesh"}',
@@ -165,7 +172,7 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
   END IF;
 
-  -- ── 6. YAZHINI ────────────────────────────────────────────
+  -- ── 6. YAZHINI  (password: Yazhi@2026) ───────────────────
   uid := gen_random_uuid();
   INSERT INTO auth.users (
     id, instance_id, email, encrypted_password,
@@ -176,7 +183,7 @@ BEGIN
     uid,
     '00000000-0000-0000-0000-000000000000',
     'yazhini@farmersfactory.in',
-    crypt('FF@2026', gen_salt('bf')),
+    crypt('Yazhi@2026', gen_salt('bf')),
     now(),
     '{"provider":"email","providers":["email"]}',
     '{"name":"Yazhini"}',
@@ -195,7 +202,7 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
   END IF;
 
-  -- ── 7. AMIRTHALINGAM S ─────────────────────────────────────
+  -- ── 7. AMIRTHALINGAM S  (password: Amirth@2026) ───────────
   uid := gen_random_uuid();
   INSERT INTO auth.users (
     id, instance_id, email, encrypted_password,
@@ -206,7 +213,7 @@ BEGIN
     uid,
     '00000000-0000-0000-0000-000000000000',
     'amirthalingam@farmersfactory.in',
-    crypt('FF@2026', gen_salt('bf')),
+    crypt('Amirth@2026', gen_salt('bf')),
     now(),
     '{"provider":"email","providers":["email"]}',
     '{"name":"Amirthalingam S"}',
@@ -225,7 +232,7 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
   END IF;
 
-  -- ── 8. ANUSIYA A ──────────────────────────────────────────
+  -- ── 8. ANUSIYA A  (password: Anusi@2026) ─────────────────
   uid := gen_random_uuid();
   INSERT INTO auth.users (
     id, instance_id, email, encrypted_password,
@@ -236,7 +243,7 @@ BEGIN
     uid,
     '00000000-0000-0000-0000-000000000000',
     'anusiya@farmersfactory.in',
-    crypt('FF@2026', gen_salt('bf')),
+    crypt('Anusi@2026', gen_salt('bf')),
     now(),
     '{"provider":"email","providers":["email"]}',
     '{"name":"Anusiya A"}',
