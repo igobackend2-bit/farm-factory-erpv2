@@ -549,7 +549,7 @@ const AppRoutes = () => {
       <Route path="/hr/employee-payroll/:profileId" element={<ProtectedRoute allowedRoles={['hr', 'admin', 'accounts', 'ceo', 'auditor']}><HREmployeePayrollProfile /></ProtectedRoute>} />
       <Route path="/hr/approval" element={<ProtectedRoute allowedRoles={['hr', 'admin', 'accounts', 'ceo', 'auditor', 'Auditor', 'director', 'Director']}><HRSalaryApprovalPage /></ProtectedRoute>} />
       <Route path="/hr/salary-calculation" element={<ProtectedRoute allowedRoles={['hr', 'admin', 'accounts', 'ceo']}><HRSalaryCalculationPage /></ProtectedRoute>} />
-      <Route path="/my-payslips" element={<ProtectedRoute allowedRoles={['employee', 'admin', 'hr', 'ceo', 'ff_operations_manager']}><EmployeeMyPayslipsPage /></ProtectedRoute>} />
+      <Route path="/my-payslips" element={<ProtectedRoute allowedRoles={ALL_STAFF_ROLES}><EmployeeMyPayslipsPage /></ProtectedRoute>} />
 
       {/* Onboarding Module Routes */}
       {/* Public route for new employees - no auth required */}
@@ -721,7 +721,7 @@ const AppRoutes = () => {
       {/* Shared Routes - Open Visibility for all Solver roles */}
       <Route path="/rsh/escalations" element={<ProtectedRoute allowedRoles={['rsh', 'RSH', 'employee', 'ceo', 'admin', 'boi', 'gm']}><RSHEscalationDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/escalations" element={<ProtectedRoute allowedRoles={['boi', 'gmo', 'smo', 'gm', 'admin', 'ceo', 'nsm', 'datateam', 'data_team', 'data', 'bd_data', 'employee']}><UnifiedEscalationsPage /></ProtectedRoute>} />
-      <Route path="/dashboard/my-escalations" element={<ProtectedRoute allowedRoles={['employee', 'hr', 'accounts', 'admin', 'smo', 'nsm', 'gmo', 'gm', 'boi', 'datateam', 'ceo', 'purchase_head', 'vendor_head', 'auditor', 'director', 'Director', 'rsh', 'RSH', 'bd_data', 'ff_operations_manager']}><MyEscalationsPage /></ProtectedRoute>} />
+      <Route path="/dashboard/my-escalations" element={<ProtectedRoute allowedRoles={ALL_STAFF_ROLES}><MyEscalationsPage /></ProtectedRoute>} />
       <Route path="/audit-logs" element={<ProtectedRoute allowedRoles={['admin', 'ceo', 'auditor']}><AuditLogPage /></ProtectedRoute>} />
       <Route path="/attendance-calendar" element={<ProtectedRoute allowedRoles={['admin', 'ceo', 'hr', 'auditor']}><AttendanceCalendarPage /></ProtectedRoute>} />
       <Route path="/employee-directory" element={<ProtectedRoute allowedRoles={['admin', 'hr', 'auditor', 'ceo']}><EmployeeDirectoryPage /></ProtectedRoute>} />
