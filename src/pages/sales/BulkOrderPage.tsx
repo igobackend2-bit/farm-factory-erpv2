@@ -264,7 +264,7 @@ export default function BulkOrderPage() {
           subtotal:      total,
           net_amount:    total,
           total_amount:  total,
-          notes:         String(r.notes ?? '').trim() || null,
+          notes:         [String(r.salesperson ?? '').trim() ? `By: ${String(r.salesperson).trim()}` : '', String(r.notes ?? '').trim()].filter(Boolean).join(' | ') || null,
           hub_id:        hubMap[hubName.toLowerCase()] ?? null,
           hub_name:      hubName || null,
           shift:         Number(r.shift) || null,
@@ -401,14 +401,15 @@ export default function BulkOrderPage() {
             <table className="w-full text-xs">
               <thead className="bg-gray-50 text-gray-500 sticky top-0">
                 <tr>
-                  {['customer_name','phone','hub_name','shift','product_name','qty','unit','unit_price','payment_mode','delivery_date'].map(h => (
+                  {['salesperson','customer_name','phone','hub_name','shift','product_name','qty','unit','unit_price','payment_mode'].map(h => (
                     <th key={h} className="px-3 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {csvPreview.slice(0, 10).map((r, i) => (
+                {csvPreview.slice(0, 10).map((r: any, i: number) => (
                   <tr key={i} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 font-bold text-blue-700 whitespace-nowrap">{r.salesperson ?? '—'}</td>
                     <td className="px-3 py-2 font-semibold text-gray-800 whitespace-nowrap">{r.customer_name}</td>
                     <td className="px-3 py-2 text-gray-500">{r.phone}</td>
                     <td className="px-3 py-2">
@@ -426,7 +427,6 @@ export default function BulkOrderPage() {
                     <td className="px-3 py-2">{r.unit}</td>
                     <td className="px-3 py-2 font-semibold">₹{r.unit_price}</td>
                     <td className="px-3 py-2 uppercase text-[10px] font-bold text-gray-500">{r.payment_mode}</td>
-                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{r.delivery_date}</td>
                   </tr>
                 ))}
               </tbody>
