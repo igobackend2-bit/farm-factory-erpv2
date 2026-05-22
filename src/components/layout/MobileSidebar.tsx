@@ -91,13 +91,15 @@ const navigationConfig: NavGroup[] = [
     title: 'Daily Workflow',
     icon: Clock,
     roles: [
-      'employee', 'director', 'Director', 'purchase_head', 'vendor_head', 
-      'nsm', 'datateam', 'data_team', 'data', 'boi', 'gmo', 'smo', 'hr', 'gm', 'admin', 
+      'employee', 'director', 'Director', 'purchase_head', 'vendor_head',
+      'nsm', 'datateam', 'data_team', 'data', 'boi', 'gmo', 'smo', 'hr', 'gm', 'admin',
       'accounts', 'farmmanager', 'bd_data', 'rsh', 'RSH', 'site_visit_farm_manager',
-      'cafe_manager', 'palm_cafe_manager'
+      'cafe_manager', 'palm_cafe_manager', 'ff_operations_manager',
+      'bde', 'field_executive', 'back_office', 'tele_caller', 'shift_employee', 'driver',
     ],
     defaultOpen: true,
     items: [
+      { icon: Home, label: 'My Dashboard', path: '/employee-dashboard' },
       { icon: Clock, label: 'Login', path: '/day-start' },
       { icon: Timer, label: 'Hourly Plan & Report', path: '/hourly-report' },
       { icon: ClipboardList, label: 'Day Plan', path: '/day-plan' },
@@ -108,6 +110,7 @@ const navigationConfig: NavGroup[] = [
       { icon: AlertTriangle, label: 'My Escalations', path: '/dashboard/my-escalations' },
       { icon: Calendar, label: 'Leave Request', path: '/leave-request' },
       { icon: CreditCard, label: 'Payment Request', path: '/payment-request' },
+      { icon: FileText, label: 'My Payslip', path: '/my-payslips' },
       { icon: History, label: 'My Requests', path: '/my-requests' },
       { icon: Coffee, label: 'PALM CAFE', path: '/palm-cafe' },
       { icon: MessageSquare, label: 'Chat', path: '/chat' },
@@ -624,6 +627,77 @@ const navigationConfig: NavGroup[] = [
     items: [
       { icon: AlertTriangle, label: 'Raise Escalation', path: '/nsm-dashboard?create=true' },
       { icon: History, label: 'My Escalations', path: '/dashboard/my-escalations' },
+    ],
+  },
+
+  // ── FF Operations Manager ─────────────────────────────────────────────────
+  {
+    title: 'Hub Management',
+    icon: Database,
+    roles: ['ff_operations_manager'],
+    defaultOpen: true,
+    items: [
+      { icon: LayoutDashboard, label: 'All Hubs Overview',  path: '/admin/hubs' },
+      { icon: MapPin,          label: 'Palikarani Hub',    path: '/admin/hubs/palikarani' },
+      { icon: MapPin,          label: 'Vanagaram Hub',     path: '/admin/hubs/vanagaram' },
+      { icon: MapPin,          label: 'Hyderabad Hub',     path: '/admin/hubs/hyderabad' },
+    ],
+  },
+  {
+    title: 'FF Operations',
+    icon: Briefcase,
+    roles: ['ff_operations_manager'],
+    defaultOpen: true,
+    items: [
+      { icon: LayoutDashboard, label: 'Home',              path: '/ff-operations' },
+      { icon: Package,         label: 'Items',             path: '/ff-operations/items' },
+      { icon: Activity,        label: 'Auto PO',           path: '/purchase/auto-po' },
+      { icon: FileText,        label: 'Auto Bill',         path: '/purchase/auto-bill' },
+      { icon: Truck,           label: 'Transit',           path: '/transit' },
+      { icon: LayoutDashboard, label: 'Sales Dashboard',   path: '/sales' },
+      { icon: Users,           label: 'Customers',         path: '/sales/customers' },
+      { icon: ClipboardList,   label: 'Sales Orders',      path: '/sales/orders' },
+      { icon: FileText,        label: 'Invoices',          path: '/sales/invoices' },
+    ],
+  },
+
+  // ── Sales / BDE ───────────────────────────────────────────────────────────
+  {
+    title: 'Sales',
+    icon: Activity,
+    roles: ['field_executive', 'bde', 'back_office'],
+    defaultOpen: true,
+    items: [
+      { icon: LayoutDashboard, label: 'Sales Dashboard',   path: '/sales' },
+      { icon: Plus,            label: 'New Order',         path: '/sales/new-order' },
+      { icon: ClipboardList,   label: 'All Orders',        path: '/sales/orders' },
+      { icon: Users,           label: 'Customers',         path: '/sales/customers' },
+      { icon: CreditCard,      label: 'Collections',       path: '/sales/collections' },
+      { icon: BarChart3,       label: 'Subscriptions',     path: '/sales/subscriptions' },
+      { icon: Activity,        label: 'Sales Targets',     path: '/sales/targets' },
+    ],
+  },
+
+  // ── Tele-Caller CRM ───────────────────────────────────────────────────────
+  {
+    title: 'Tele-Caller CRM',
+    icon: PhoneCall,
+    roles: ['tele_caller', 'back_office'],
+    defaultOpen: true,
+    items: [
+      { icon: LayoutDashboard, label: 'CRM Dashboard',    path: '/tele-caller' },
+    ],
+  },
+
+  // ── Driver / Logistics ────────────────────────────────────────────────────
+  {
+    title: 'Logistics',
+    icon: Truck,
+    roles: ['driver'],
+    defaultOpen: true,
+    items: [
+      { icon: LayoutDashboard, label: 'Trips Dashboard',  path: '/logistics' },
+      { icon: Truck,           label: 'Driver View',      path: '/driver' },
     ],
   },
 ];
