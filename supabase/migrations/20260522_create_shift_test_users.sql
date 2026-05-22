@@ -23,6 +23,139 @@
 --  - Assigned in shift_user_assignments (target_hours=8, max_hours=10)
 -- ============================================================
 
+-- ── Create shift_user_assignments table if not exists ────────
+CREATE TABLE IF NOT EXISTS public.shift_user_assignments (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  target_hours numeric NOT NULL DEFAULT 8,
+  max_hours    numeric NOT NULL DEFAULT 10,
+  is_active    boolean NOT NULL DEFAULT true,
+  assigned_by  uuid REFERENCES public.profiles(id),
+  assigned_at  timestamptz DEFAULT now(),
+  created_at   timestamptz DEFAULT now(),
+  UNIQUE (user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_shift_user_assignments_user_id ON public.shift_user_assignments(user_id);
+
+ALTER TABLE public.shift_user_assignments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins manage shift assignments" ON public.shift_user_assignments;
+DROP POLICY IF EXISTS "Users view own shift assignment"  ON public.shift_user_assignments;
+
+CREATE POLICY "Admins manage shift assignments"
+  ON public.shift_user_assignments FOR ALL
+  USING (get_my_role() IN ('admin','ceo','hr','gm'));
+
+CREATE POLICY "Users view own shift assignment"
+  ON public.shift_user_assignments FOR SELECT
+  USING (user_id = auth.uid());
+
+-- ── Create shift_sessions table if not exists ────────────────
+CREATE TABLE IF NOT EXISTS public.shift_sessions (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  date         date NOT NULL,
+  login_time   timestamptz,
+  logout_time  timestamptz,
+  total_hours  numeric DEFAULT 0,
+  status       text DEFAULT 'active',
+  created_at   timestamptz DEFAULT now(),
+  UNIQUE (user_id, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_shift_sessions_user_id ON public.shift_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_shift_sessions_date    ON public.shift_sessions(date);
+
+ALTER TABLE public.shift_sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users manage own shift sessions"  ON public.shift_sessions;
+DROP POLICY IF EXISTS "Admins view all shift sessions"   ON public.shift_sessions;
+
+CREATE POLICY "Users manage own shift sessions"
+  ON public.shift_sessions FOR ALL
+  USING (user_id = auth.uid());
+
+CREATE POLICY "Admins view all shift sessions"
+  ON public.shift_sessions FOR SELECT
+  USING (get_my_role() IN ('admin','ceo','hr','gm'));
+
+-- ── Create shift_hourly_slots table if not exists ────────────
+CREATE TABLE IF NOT EXISTS public.shift_hourly_slots (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id  uuid NOT NULL REFERENCES public.shift_sessions(id) ON DELETE CASCADE,
+  slot_hour   integer NOT NULL,
+  task        text,
+  status      text DEFAULT 'pending',
+  created_at  timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.shift_hourly_slots ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users manage own hourly slots" ON public.shift_hourly_slots;
+DROP POLICY IF EXISTS "Admins view all hourly slots"  ON public.shift_hourly_slots;
+
+CREATE POLICY "Users manage own hourly slots"
+  ON public.shift_hourly_slots FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.shift_sessions s
+      WHERE s.id = session_id AND s.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Admins view all hourly slots"
+  ON public.shift_hourly_slots FOR SELECT
+  USING (get_my_role() IN ('admin','ceo','hr','gm'));
+
+-- ── Create shift_eod_reports table if not exists ─────────────
+CREATE TABLE IF NOT EXISTS public.shift_eod_reports (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id  uuid NOT NULL REFERENCES public.shift_sessions(id) ON DELETE CASCADE,
+  summary     text,
+  highlights  text,
+  challenges  text,
+  submitted_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.shift_eod_reports ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users manage own eod reports" ON public.shift_eod_reports;
+DROP POLICY IF EXISTS "Admins view all eod reports"  ON public.shift_eod_reports;
+
+CREATE POLICY "Users manage own eod reports"
+  ON public.shift_eod_reports FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.shift_sessions s
+      WHERE s.id = session_id AND s.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Admins view all eod reports"
+  ON public.shift_eod_reports FOR SELECT
+  USING (get_my_role() IN ('admin','ceo','hr','gm'));
+
+-- ── Create shift_assignment_history table if not exists ───────
+CREATE TABLE IF NOT EXISTS public.shift_assignment_history (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  action      text NOT NULL,
+  changed_by  uuid REFERENCES public.profiles(id),
+  changed_at  timestamptz DEFAULT now(),
+  notes       text
+);
+
+ALTER TABLE public.shift_assignment_history ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins manage shift history" ON public.shift_assignment_history;
+
+CREATE POLICY "Admins manage shift history"
+  ON public.shift_assignment_history FOR ALL
+  USING (get_my_role() IN ('admin','ceo','hr','gm'));
+
+-- ── Now create the test users ─────────────────────────────────
+
 DO $$
 DECLARE
   uid uuid;
