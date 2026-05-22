@@ -30,8 +30,8 @@ DECLARE
 BEGIN
 
   -- Get any admin user to use as 'assigned_by'
-  SELECT id INTO admin_uid FROM auth.users
-    JOIN public.profiles ON profiles.id = auth.users.id
+  SELECT profiles.id INTO admin_uid
+    FROM public.profiles
     WHERE profiles.role = 'admin' LIMIT 1;
 
   -- Fallback if no admin found
